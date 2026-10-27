@@ -49,3 +49,75 @@ Open the Vite URL (usually http://localhost:5173). The Vite proxy forwards `/soc
 ## Notes
 
 The battlefield decorations are visual only; the original client/server collision obstacle boxes are authoritative. Sound starts after browser user interaction. Browser audio restrictions may mute sound until you click the game. The server is a demonstration-grade two-player room server, not a production anti-cheat implementation.
+
+## Public multiplayer and Render deployment
+
+The local Vite `/socket.io` proxy exists only in `npm run dev`. A production
+static build cannot forward requests to the Node server. Previously the client
+always connected to the page origin, so a separately hosted frontend had no
+route to the multiplayer backend. A room code identifies a room in one running
+server's memory; it does not locate a server or connect computers by itself.
+
+### Deploy the multiplayer backend
+
+1. Push these changes to GitHub. In Render choose **New → Blueprint**, connect
+   `Rahul-Kumbhar8889/operation-shadowstrike-upgrade`, and select the branch
+   containing `render.yaml`.
+2. When asked for `CORS_ORIGINS`, enter the exact frontend origin, for example
+   `https://your-game.onrender.com`. Multiple origins are comma-separated (no
+   paths or trailing slashes). For local frontend testing against Render include
+   `http://localhost:5173`. This setting is not a credential.
+3. Deploy the Blueprint. It creates a Node web service with `npm install
+   --omit=dev --no-audit --no-fund`, `npm start`, and `/health` as its health
+   check. Render supplies `PORT`; the server binds to `0.0.0.0`. No manual port
+   value is necessary. Keep **one backend instance**, since rooms are in memory.
+4. Copy the service's public HTTPS URL and request `https://YOUR-SERVICE.onrender.com/health`.
+   Expect HTTP 200 and `{"status":"ok"}`. This checks service readiness, not
+   multiplayer behavior. Free services can sleep; allow startup time and retry.
+
+### Deploy the frontend
+
+1. In Render choose **New → Static Site**, connect this repository and branch.
+   Use build command `npm install --no-audit --no-fund && npm run build` and
+   publish directory `dist`.
+2. Before building, set `VITE_SOCKET_SERVER_URL` to the backend's public HTTPS
+   origin, for example `https://operation-shadowstrike-server.onrender.com`.
+   This is a public build-time value, not a secret. Do not use localhost,
+   a private IP, a `ws://` URL, or append `/socket.io`.
+3. Deploy. Set the backend's `CORS_ORIGINS` to the actual static site's HTTPS
+   origin and redeploy the backend if the origin differs from the initial value.
+4. Both players must open this same deployed game (or builds configured with
+   the same backend URL). Player 1 creates a room; player 2 enters its code.
+   A change to `VITE_SOCKET_SERVER_URL` requires a fresh frontend build/deploy.
+
+For local development leave `VITE_SOCKET_SERVER_URL` unset and run the two
+Quick start commands. To use a public backend locally, copy `.env.example` to
+`.env`, set the real URL, allow the local frontend origin in `CORS_ORIGINS`, and
+restart Vite. The server defaults to port 3001 and permits only
+`http://localhost:5173` and `http://127.0.0.1:5173` unless `CORS_ORIGINS` is set.
+Requests without an Origin header (health probes and command-line clients) are
+accepted. Origin checks are browser access policy, not player authentication.
+
+### Connection diagnostics and validation
+
+The lobby shows connection/request progress, gives cold starts up to 90 seconds,
+and gives room acknowledgements 10 seconds. Failures clear pending listeners;
+retry is explicit. Entering solo training cancels pending connections. Polling
+can upgrade to WebSocket; networks that block WebSocket can retain polling.
+A disconnected match returns to the lobby because server-side players are
+removed on disconnect; there is no automatic room/session restoration.
+
+- If `/health` fails, inspect Render service logs and startup status.
+- If the health check works but the browser connection fails, inspect the
+  browser Network/Console for the `/socket.io` request URL, HTTPS mixed content,
+  CORS origin rejection, or a blocked transport. Never disable TLS verification.
+- `Room not found` after connection usually means a different backend or a
+  server restart. Rooms disappear on deployment, restart, or free-service sleep.
+- `npm test` starts an isolated backend on a dynamic port and exercises separate
+  client connections, CORS, transport support, room lifecycle, and combat events.
+  `npm run build` validates the production bundle. These are local checks.
+- Before claiming public multiplayer works, test the deployed HTTPS game on
+  **two different computers/networks**: create/join the same room, verify both
+  players appear, movement/shots synchronize, damage/respawn work, and leaving
+  updates the other player. Also test a sleeping service and a bad/unreachable
+  backend. Public deployment and these real-world checks are not automated here.

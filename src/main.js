@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { io } from 'socket.io-client';
+import { createLobbyConnection } from './multiplayerConnection.js';
 import { createBattlefield } from './battlefield.js';
 import { createSoldier } from './soldier.js';
 import { getWeaponImage } from './weaponImages.js';
@@ -111,7 +111,7 @@ app.innerHTML = `
       <button id="joinRoom">JOIN ROOM</button>
       <button id="training" class="secondary">SOLO TRAINING</button>
 
-      <p id="roomStatus">Ready to connect</p>
+      <p id="roomStatus" role="status" aria-live="polite">Ready to connect</p>
     </div>
   </div>
 
@@ -802,13 +802,11 @@ function updateEffects() {
 // MULTIPLAYER
 // ==============================================
 
-const socket = io({
-  autoConnect: false,
-  path: '/socket.io',
-  transports: ['websocket', 'polling'],
-  timeout: 8000,
-  reconnectionAttempts: 3,
+const lobbyConnection = createLobbyConnection({
+  serverUrl: import.meta.env.VITE_SOCKET_SERVER_URL?.trim() || undefined,
+  onStatus(message) { $('#roomStatus').textContent = message; },
 });
+const socket = lobbyConnection.socket;
 
 function updateScoreboard(players) {
   $('#playerCount').textContent = `PLAYERS: ${players.length}/2`;
@@ -885,53 +883,21 @@ function enterRoom(response) {
   showMessage('CONNECTED TO COMBAT ROOM');
 }
 
-function requestRoom(eventName, code) {
+async function requestRoom(eventName, code) {
   if (connectionBusy) return;
-
   connectionBusy = true;
-  $('#roomStatus').textContent = 'Connecting...';
-
   $('#createRoom').disabled = true;
   $('#joinRoom').disabled = true;
-
-  function finish() {
+  try {
+    const response = await lobbyConnection.request(eventName, code);
+    if (response) enterRoom(response);
+  } catch (error) {
+    $('#roomStatus').textContent = error.message;
+  } finally {
     connectionBusy = false;
     $('#createRoom').disabled = false;
     $('#joinRoom').disabled = false;
   }
-
-  function sendRequest() {
-    const args = eventName === 'join-room' ? [code] : [];
-
-    socket.timeout(7000).emit(eventName, ...args, (error, response) => {
-      finish();
-
-      if (error) {
-        $('#roomStatus').textContent = 'Server did not respond';
-        return;
-      }
-
-      if (!response?.ok) {
-        $('#roomStatus').textContent = response?.error || 'Unable to join room';
-        return;
-      }
-
-      enterRoom(response);
-    });
-  }
-
-  if (socket.connected) {
-    sendRequest();
-    return;
-  }
-
-  socket.connect();
-  socket.once('connect', sendRequest);
-
-  socket.once('connect_error', (error) => {
-    finish();
-    $('#roomStatus').textContent = `Connection failed: ${error.message}`;
-  });
 }
 
 $('#createRoom').onclick = () => requestRoom('create-room');
@@ -948,6 +914,7 @@ $('#joinRoom').onclick = () => {
 };
 
 $('#training').onclick = () => {
+  lobbyConnection.cancel();
   resetPlayerWeapons();
   resetTargets();
 
@@ -973,7 +940,7 @@ function leaveGame() {
   currentRoom = null;
   multiplayerActive = false;
 
-  socket.disconnect();
+  lobbyConnection.cancel();
 
   alive = true;
   hp = 100;
@@ -1248,12 +1215,12 @@ socket.on('player-respawned', (data) => {
   }
 });
 
-socket.on('disconnect', () => {
+socket.on('disconnect', (reason) => {
   if (!multiplayerActive) return;
 
   leaveGame();
 
-  $('#roomStatus').textContent = 'Connection lost. Create or join a new room.';
+  $('#roomStatus').textContent = `Connection lost (${reason}). Rooms are not restored automatically; create or join a room again.`;
 });
 
 // ==============================================

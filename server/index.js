@@ -4,16 +4,28 @@ import { Server } from 'socket.io';
 // OPERATION SHADOWSTRIKE
 // STEP 19B - ADVANCED WEAPON SERVER
 
-const httpServer = createServer((req, res) => {
-  res.writeHead(200, {
-    'Content-Type': 'text/plain',
-  });
+const port = Number(process.env.PORT || 3001);
+const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173')
+  .split(',').map((origin) => origin.trim()).filter(Boolean);
+const originAllowed = (origin) => !origin || allowedOrigins.includes(origin);
 
-  res.end('Operation Shadowstrike multiplayer server');
+const httpServer = createServer((req, res) => {
+  if (req.url === '/health') {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify({ status: 'ok' }));
+    return;
+  }
+  res.writeHead(req.url === '/' ? 200 : 404, { 'Content-Type': 'text/plain' });
+  res.end(req.url === '/' ? 'Operation Shadowstrike multiplayer server' : 'Not found');
 });
 
 const io = new Server(httpServer, {
-  cors: { origin: '*' },
+  cors: {
+    origin(origin, callback) { callback(null, originAllowed(origin)); },
+    methods: ['GET', 'POST'],
+  },
+  // CORS alone does not restrict WebSocket handshakes.
+  allowRequest: (req, callback) => callback(null, originAllowed(req.headers.origin)),
   transports: ['websocket', 'polling'],
 });
 
@@ -805,6 +817,6 @@ io.on('connection', (socket) => {
   });
 });
 
-httpServer.listen(3001, '0.0.0.0', () => {
-  console.log('Multiplayer server running on port 3001');
+httpServer.listen(port, '0.0.0.0', () => {
+  console.log(`Multiplayer server running on port ${httpServer.address().port}`);
 });
