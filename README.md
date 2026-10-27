@@ -68,7 +68,7 @@ server's memory; it does not locate a server or connect computers by itself.
    paths or trailing slashes). For local frontend testing against Render include
    `http://localhost:5173`. This setting is not a credential.
 3. Deploy the Blueprint. It creates a Node web service with `npm install
-   --omit=dev --no-audit --no-fund`, `npm start`, and `/health` as its health
+   --omit=dev --no-audit --no-fund`, `node server/index.js`, and `/health` as its health
    check. Render supplies `PORT`; the server binds to `0.0.0.0`. No manual port
    value is necessary. Keep **one backend instance**, since rooms are in memory.
 4. Copy the service's public HTTPS URL and request `https://YOUR-SERVICE.onrender.com/health`.
@@ -121,3 +121,24 @@ removed on disconnect; there is no automatic room/session restoration.
   players appear, movement/shots synchronize, damage/respawn work, and leaving
   updates the other player. Also test a sleeping service and a bad/unreachable
   backend. Public deployment and these real-world checks are not automated here.
+
+### If Render returns “Not found” for `/health`
+
+The server in this branch supports GET and HEAD on `/health` and `/health/`,
+including query strings. Unknown paths still return 404. Socket.IO continues
+handling `/socket.io` independently.
+
+In the Render backend service's Settings, verify the linked repository is
+`Rahul-Kumbhar8889/operation-shadowstrike-upgrade`, the branch contains this fix
+(use `main` after merging), Root Directory is blank, Start Command is
+`node server/index.js`, and Health Check Path is `/health`. The Blueprint
+contains these start/health settings, but an existing manually created service
+may still have different dashboard settings. Check the deployed commit in the
+Render Events page against the merged GitHub commit, then choose Manual Deploy
+→ Deploy latest commit. Wait for the deployment to finish and request the
+backend's own public URL with `/health`; expect HTTP 200 and `{"status":"ok"}`.
+
+Exact `/health` already existed in the earlier multiplayer fix. If that exact
+URL returns the application's “Not found” response, verify the deployed commit,
+service URL and entrypoint rather than assuming the current source lacks the
+route. A local passing test cannot establish which code Render is running.

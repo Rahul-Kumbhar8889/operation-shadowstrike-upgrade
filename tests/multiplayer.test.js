@@ -41,6 +41,22 @@ async function client(transport, requestOrigin = origin) {
   socket.connect(); await connected; return socket;
 }
 
+test('Render health route accepts query strings, trailing slash and HEAD', async () => {
+  for (const path of ['/health', '/health/', '/health?probe=render', '/health/?probe=render']) {
+    const response = await fetch(`${base}${path}`);
+    assert.equal(response.status, 200, path);
+    assert.match(response.headers.get('content-type'), /application\/json/);
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.deepEqual(await response.json(), { status: 'ok' });
+  }
+  const head = await fetch(`${base}/health`, { method: 'HEAD' });
+  assert.equal(head.status, 200);
+  assert.equal(await head.text(), '');
+  assert.equal((await fetch(`${base}/health-invalid`)).status, 404);
+  assert.equal((await fetch(`${base}/health`, { method: 'POST' })).status, 404);
+  assert.match(await fetch(base).then(response => response.text()), /Operation Shadowstrike multiplayer server/);
+});
+
 test('health, dynamic PORT, exact CORS origins, and denied browser origins', async () => {
   const health = await fetch(`${base}/health`);
   assert.equal(health.status, 200); assert.deepEqual(await health.json(), { status: 'ok' });
