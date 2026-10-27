@@ -10,7 +10,10 @@ const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http:
 const originAllowed = (origin) => !origin || allowedOrigins.includes(origin);
 
 const httpServer = createServer((req, res) => {
-  if (req.url === '/health') {
+  // Match the path independently of query strings and a trailing slash.
+  const pathname = new URL(req.url, 'http://localhost').pathname;
+  if ((req.method === 'GET' || req.method === 'HEAD') &&
+      (pathname === '/health' || pathname === '/health/')) {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     res.end(JSON.stringify({ status: 'ok' }));
     return;

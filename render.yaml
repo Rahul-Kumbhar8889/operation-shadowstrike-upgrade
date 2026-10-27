@@ -4,7 +4,8 @@ services:
     runtime: node
     plan: free
     buildCommand: npm install --omit=dev --no-audit --no-fund
-    startCommand: npm start
+    # Run the same entrypoint covered by the integration tests.
+    startCommand: node server/index.js
     healthCheckPath: /health
     envVars:
       - key: NODE_VERSION
