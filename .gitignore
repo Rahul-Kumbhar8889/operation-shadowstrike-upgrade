@@ -2,3 +2,7 @@ node_modules/
 dist/
 .env
 .DS_Store
+
+# Local Vite overrides may contain developer-specific values.
+.env.local
+.env.*.local
