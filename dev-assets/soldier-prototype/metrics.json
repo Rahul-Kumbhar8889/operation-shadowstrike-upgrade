@@ -1,0 +1,10 @@
+{
+  "triangles": 31792,
+  "bytes": 1367008,
+  "rigged": false,
+  "animations": 0,
+  "original_geometry": true,
+  "original_textures": true,
+  "authoring": "scripts/build-soldier-prototype.py",
+  "intended_use": "Development-only static visual study; not a production character replacement."
+}

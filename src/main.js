@@ -486,6 +486,13 @@ function setCharacterWeapon(character, id) {
 
 prepareWeaponModels(soldier);
 
+// Opt-in local art study only; Vite removes this branch from production builds.
+if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('soldierPreview') === '1') {
+  import('./soldierPreview.js')
+    .then(({ enableSoldierPreview }) => enableSoldierPreview(soldier, renderer))
+    .catch(error => console.warn('Soldier preview unavailable; keeping original soldier:', error));
+}
+
 function addRemotePlayer(data) {
   if (!data || data.id === socket.id) return;
 

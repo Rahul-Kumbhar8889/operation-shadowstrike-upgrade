@@ -159,3 +159,10 @@ The unmerged Phase 1 branch includes an original GLB operations building and
 self-hosted CC0 Poly Haven PBR maps. See [matched screenshots, scope and validation](docs/operations-proof.md)
 and [asset sources and licenses](public/assets/operations/ASSET-SOURCES.md).
 The other buildings and existing gameplay/networking remain unchanged.
+
+## Unapproved soldier art study (development only)
+
+An original static operator study can be inspected with `?soldierPreview=1` in
+Vite development, or on `soldier-preview.html`. It **did not meet the requested
+realistic character quality** and is not included in production. See
+[the assessment, screenshots and limitations](docs/soldier-prototype.md).
