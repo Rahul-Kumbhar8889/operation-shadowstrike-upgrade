@@ -283,14 +283,14 @@ app.innerHTML = `
 // ==============================================
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x101b2a);
-scene.fog = new THREE.Fog(0x101b2a, 30, 100);
+scene.background = new THREE.Color(0xbac8c5);
+scene.fog = new THREE.Fog(0xbac8c5, 48, 155);
 
 const camera = new THREE.PerspectiveCamera(
   65,
   window.innerWidth / window.innerHeight,
   0.1,
-  150
+  200
 );
 
 const renderer = new THREE.WebGLRenderer({
@@ -299,18 +299,28 @@ const renderer = new THREE.WebGLRenderer({
 
 renderer.setSize(window.innerWidth, window.innerHeight);
 
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+// Limit fill-rate while retaining antialiasing on ordinary desktop displays.
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 
 renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
 
 $('#game').appendChild(renderer.domElement);
 
-scene.add(new THREE.HemisphereLight(0xa8c8ff, 0x243322, 2));
+scene.add(new THREE.HemisphereLight(0xc9dce4, 0x69684b, 1.8));
 
-const sun = new THREE.DirectionalLight(0xffe2b3, 2.5);
+const sun = new THREE.DirectionalLight(0xffe4bd, 3);
 
-sun.position.set(12, 25, 10);
+sun.position.set(32, 48, 24);
 sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -70, right: 70, top: 70, bottom: -70, near: 1, far: 150 });
+sun.shadow.camera.updateProjectionMatrix();
+sun.shadow.normalBias = 0.035;
+sun.shadow.bias = -0.0001;
 scene.add(sun);
 
 const ground = new THREE.Mesh(
@@ -349,7 +359,7 @@ addBox(0, -15, 4, 2, 4, 0x766a51);
 addBox(-4, 4, 3, 2, 3, 0x766a51);
 addBox(5, 3, 3, 2, 3, 0x766a51);
 
-createBattlefield(scene);
+createBattlefield(scene, obstacles, ground);
 const combatFX = createCombatEffects(scene);
 
 function collides(x, z, radius = 0.38) {

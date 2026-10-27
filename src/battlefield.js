@@ -1,43 +1,179 @@
 import * as THREE from 'three';
-// Decorative, collision-free tactical environment. Server collision boxes remain authoritative.
-export function createBattlefield(scene) {
-  const group=new THREE.Group();group.name='MilitaryBattlefield';scene.add(group);
-  const m=(color,metalness=0)=>new THREE.MeshStandardMaterial({color,roughness:.9,metalness});
-  const road=m(0x39434a), line=m(0xb8a66b), sand=m(0x8b7958), wood=m(0x6b5540), metal=m(0x53616a,.35), concrete=m(0x747b75), grass=m(0x425e37);
-  function box(w,h,d,material,x,y,z,rotation=0){const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),material);o.position.set(x,y,z);o.rotation.y=rotation;o.receiveShadow=true;o.castShadow=true;group.add(o);return o;}
-  box(92,.035,7,road,0,.018,19);box(7,.035,92,road,20,.019,0);
-  for(let i=-40;i<=40;i+=8){box(3,.045,.13,line,i,.045,19);box(.13,.045,3,line,20,.047,i);}
-  // Sandbag walls and original cover props outside spawn and target lines.
-  for(const [x,z,r] of [[-23,-20,0],[23,-22,0],[-26,13,0],[26,26,Math.PI/2],[-17,26,0],[28,-5,Math.PI/2]]){
-    for(let layer=0;layer<3;layer++)for(let j=0;j<5-layer%2;j++){const b=box(1.03,.34,.55,sand,x+(j-2)*.99+(layer%2)*.4,.23+layer*.33,z,r);b.rotation.z=(j%2?-.02:.02);}
+import { createEnvironmentTextures } from './environmentTextures.js';
+
+// All solid detail stays inside existing obstacle volumes or outside ±45 play bounds.
+// This module never adds collision bodies or changes authoritative game geometry.
+export function createBattlefield(scene, obstacles, ground) {
+  const group = new THREE.Group();
+  group.name = 'MilitaryCompound';
+  scene.add(group);
+  const textures = createEnvironmentTextures();
+  // Subtle micro-relief changes lighting only; the playable floor stays flat.
+  const bump = texture => {
+    const result = texture.clone(); result.colorSpace = THREE.NoColorSpace;
+    return result;
+  };
+  ground.material.map = textures.ground;
+  ground.material.bumpMap = bump(textures.ground);
+  ground.material.bumpScale = 0.035;
+  ground.material.color.set(0xffffff);
+  ground.material.needsUpdate = true;
+  const distantGround = new THREE.Mesh(new THREE.PlaneGeometry(320, 320),
+    new THREE.MeshStandardMaterial({ color: 0x77775d, roughness: 1 }));
+  distantGround.rotation.x = -Math.PI / 2;
+  distantGround.position.y = -0.04;
+  distantGround.receiveShadow = true;
+  group.add(distantGround);
+  const material = (color, options = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.88, ...options });
+  const concrete = material(0xddd8c4, { map: textures.concrete, bumpMap: bump(textures.concrete), bumpScale: 0.025 });
+  const olive = material(0x9ba18b, { map: textures.metal, bumpMap: bump(textures.metal), bumpScale: 0.025, metalness: 0.25 });
+  const steel = material(0x48514c, { metalness: 0.55, roughness: 0.65 });
+  const trim = material(0x686b5d, { polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+  const dark = material(0x242d28);
+  const sand = material(0x9e9473, { map: textures.concrete });
+  const wood = material(0x7c7052, { map: textures.concrete });
+  const glass = material(0x354d50, { metalness: 0.45, roughness: 0.3 });
+  const lamp = material(0xd2c6a1, { emissive: 0xffd393, emissiveIntensity: 0.25 });
+  const unitBox = new THREE.BoxGeometry(1, 1, 1);
+  const batches = new Map();
+  function box(mat, x, y, z, w, h, d, rz = 0) {
+    if (!batches.has(mat)) batches.set(mat, []);
+    batches.get(mat).push({ x, y, z, w, h, d, rz });
   }
-  for(const [x,z] of [[-29,-29],[32,-31],[-30,30],[32,31],[-25,3],[29,13]]){
-    box(1.8,1.6,1.8,wood,x,.8,z);box(1.8,.12,1.8,metal,x,1.63,z);
-    box(1.4,1.25,1.4,wood,x+2,.625,z+1.1);
+
+  obstacles.forEach(({ x, z, w, h, d, mesh }, index) => {
+    // Keep the original mesh for raycasts/collision; render a detailed solid shell.
+    // Its silhouette and every roof attachment fit within the original box.
+    mesh.material.visible = false;
+    const roofY = h - 0.28;
+    box(concrete, x, roofY / 2, z, w, roofY, d);
+    box(dark, x, roofY + 0.02, z, w - 0.16, 0.04, d - 0.16);
+    for (const side of [-1, 1]) {
+      box(trim, x, h - 0.12, z + side * (d / 2 - 0.08), w, 0.24, 0.16);
+      box(trim, x + side * (w / 2 - 0.08), h - 0.12, z, 0.16, 0.24, d);
+      // Inset concrete footings and corner pilasters.
+      box(trim, x, 0.22, z + side * (d / 2 - 0.025), w, 0.44, 0.05);
+      for (const corner of [-1, 1]) {
+        box(trim, x + corner * (w / 2 - 0.07), roofY / 2, z + side * (d / 2 - 0.025), 0.14, roofY, 0.05);
+      }
+    }
+    // Facade overlays are coplanar with the collision-box faces; polygon offset
+    // avoids z-fighting without projecting visual cover beyond the collider.
+    function facade(mat, px, py, pz, width, height, rotation = 0) {
+      const faceMaterial = mat.clone();
+      faceMaterial.polygonOffset = true;
+      faceMaterial.polygonOffsetFactor = -2;
+      faceMaterial.polygonOffsetUnits = -2;
+      const face = new THREE.Mesh(new THREE.PlaneGeometry(width, height), faceMaterial);
+      face.position.set(px, py, pz); face.rotation.y = rotation;
+      group.add(face);
+      return face;
+    }
+    // Sealed service panels, not enterable doorways or transparent windows.
+    for (const side of [-1, 1]) {
+      const rotation = side === 1 ? 0 : Math.PI;
+      facade(olive, x - w * 0.22, Math.min(1.15, roofY / 2), z + side * d / 2,
+        Math.min(1.35, w * 0.35), Math.min(1.85, roofY - 0.2), rotation);
+      if (h > 3) {
+        for (let i = 0; i < Math.floor(w / 2); i++) {
+          facade(glass, x - w / 2 + 1 + i * 1.8, Math.min(h - 1.2, 2.8), z + side * d / 2, 0.85, 0.65, rotation);
+        }
+      }
+      // A flush vent grille with no apparent traversable opening.
+      const vent = facade(dark, x + w * 0.25, Math.min(1.7, roofY * 0.7), z + side * d / 2, 0.7, 0.42, rotation);
+      for (let row = 0; row < 4; row++) {
+        const louver = new THREE.Mesh(new THREE.PlaneGeometry(0.65, 0.035), trim);
+        louver.position.set(0, -0.15 + row * 0.1, 0); vent.add(louver);
+      }
+    }
+    // Low rooftop equipment and beams remain below the existing collision height.
+    box(olive, x, h - 0.14, z, Math.min(1.4, w * 0.4), 0.24, Math.min(0.9, d * 0.4));
+    for (const offset of [-0.2, 0, 0.2]) box(steel, x + offset, h - 0.01, z, 0.035, 0.02, Math.min(0.8, d * 0.35));
+    // Painted building identifiers add scale and place without external assets.
+    const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#303b32'; ctx.fillRect(0, 0, 256, 64);
+    ctx.fillStyle = '#d5cdb0'; ctx.font = 'bold 28px monospace'; ctx.textAlign = 'center';
+    ctx.fillText(['OPERATIONS', 'COMMS / 02', 'SUPPLY / 03', 'BARRACKS', 'UTILITY / 05', 'STORE / 06', 'STORE / 07'][index], 128, 42);
+    const map = new THREE.CanvasTexture(canvas); map.colorSpace = THREE.SRGBColorSpace;
+    const sign = material(0xffffff, { map, roughness: 1 });
+    facade(sign, x, Math.min(h - 0.55, 2.25), z + d / 2, Math.min(w - 0.4, 1.65), 0.4);
+  });
+
+  // Perimeter compound dressing is beyond the movement boundary. Never place
+  // crates, sandbag walls, poles or fences in traversable/target shooting lanes.
+  for (const side of [-1, 1]) {
+    for (let p = -44; p <= 44; p += 4) {
+      box(steel, p, 1.4, side * 47, 0.08, 2.8, 0.08);
+      box(steel, side * 47, 1.4, p, 0.08, 2.8, 0.08);
+    }
+    for (const y of [0.2, 1.35, 2.55]) {
+      box(steel, 0, y, side * 47, 92, 0.035, 0.035);
+      box(steel, side * 47, y, 0, 0.035, 0.035, 92);
+    }
+    // Fine wire fencing, represented as one line batch below.
   }
-  for(const [x,z] of [[-38,-38],[38,-38],[-38,38],[38,38]]){
-    for(const dx of [-1.2,1.2])for(const dz of [-1.2,1.2])box(.22,6,.22,metal,x+dx,3,z+dz);
-    box(3.2,.25,3.2,wood,x,6,z);box(3.5,.2,3.5,metal,x,7.75,z);
-    for(const dx of [-1.45,1.45])box(.12,1.2,3.2,metal,x+dx,6.7,z);
-    for(const dz of [-1.45,1.45])box(3.2,1.2,.12,metal,x,6.7,z+dz);
+  const wires = [];
+  for (const side of [-1, 1]) for (let p = -46; p <= 46; p += 0.5) {
+    wires.push(p, 0.25, side * 47, Math.min(p + 1.2, 46), 2.5, side * 47);
+    wires.push(side * 47, 0.25, p, side * 47, 2.5, Math.min(p + 1.2, 46));
   }
-  for(const [x,z] of [[-31,-11],[31,-11],[-31,11],[31,11]]){
-    box(.18,7,.18,metal,x,3.5,z);const lamp=new THREE.Mesh(new THREE.ConeGeometry(.65,.7,8),concrete);lamp.position.set(x,7,z);lamp.rotation.x=Math.PI;group.add(lamp);
-    const light=new THREE.PointLight(0xffe7b0,.6,13);light.position.set(x,6.7,z);group.add(light);
+  const fence = new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(wires, 3)),
+    new THREE.LineBasicMaterial({ color: 0x626a5d, transparent: true, opacity: 0.45 }));
+  group.add(fence);
+
+  for (const x of [-49, 49]) for (const z of [-49, 49]) {
+    for (const dx of [-1, 1]) for (const dz of [-1, 1]) box(steel, x + dx, 2.6, z + dz, 0.16, 5.2, 0.16);
+    box(wood, x, 5.2, z, 2.5, 0.2, 2.5);
+    box(olive, x, 6.9, z, 3, 0.18, 3);
+    for (const side of [-1, 1]) {
+      box(olive, x, 5.7, z + side * 1.15, 2.4, 0.8, 0.12);
+      box(olive, x + side * 1.15, 5.7, z, 0.12, 0.8, 2.4);
+      for (const dx of [-1.1, 1.1]) box(steel, x + dx, 6.1, z + side * 1.1, 0.1, 1.5, 0.1);
+      // Diagonal braces and ladder, safely outside the accessible arena.
+      box(steel, x, 2.8, z + side, 0.1, 5.4, 0.12, side * 0.36);
+    }
+    for (const dx of [-0.3, 0.3]) box(steel, x + dx, 2.5, z - 1.3, 0.06, 5, 0.06);
+    for (let y = 0.3; y < 5; y += 0.38) box(steel, x, y, z - 1.3, 0.65, 0.04, 0.06);
+    box(lamp, x, 6.65, z - 1.15, 0.45, 0.12, 0.15);
   }
-  // Deterministic low-poly grass clumps.
-  let seed=231;const rnd=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
-  const blade=new THREE.ConeGeometry(.12,.65,3);
-  for(let i=0;i<135;i++){
-    const x=rnd()*88-44,z=rnd()*88-44;
-    if(Math.abs(z-19)<5||Math.abs(x-20)<5||Math.abs(x)<6&&Math.abs(z)<6)continue;
-    const mesh=new THREE.Mesh(blade,grass);mesh.position.set(x,.3,z);mesh.rotation.y=rnd()*6.28;mesh.scale.setScalar(.6+rnd()*.8);group.add(mesh);
+
+  for (const z of [-32, -16, 0, 16, 32]) for (const side of [-1, 1]) {
+    const x = side * 48.7;
+    // Wooden supply crates with steel edge bands.
+    box(wood, x, 0.65, z, 1.4, 1.3, 1.5);
+    for (const dz of [-0.6, 0.6]) box(steel, x, 0.65, z + dz, 1.42, 1.32, 0.055);
+    box(olive, x, 1.5, z, 1.1, 0.4, 1.1);
+    for (let layer = 0; layer < 3; layer++) for (let j = 0; j < 5; j++) {
+      box(sand, side * 48.7, 0.15 + layer * 0.26, z + 3 + j * 0.7 + (layer % 2) * 0.25, 0.62, 0.27, 0.78, (j % 2 ? 1 : -1) * 0.025);
+    }
   }
-  // Scenic perimeter silhouettes (not gameplay obstacles).
-  const trunk=m(0x4b4032),leaf=m(0x263f2e);
-  for(const [x,z] of [[-43,-31],[-43,-4],[-42,31],[42,-25],[42,7],[39,40],[-19,42]]){
-    box(.5,3,.5,trunk,x,1.5,z);
-    const canopy=new THREE.Mesh(new THREE.ConeGeometry(2.1,5,6),leaf);canopy.position.set(x,5,z);canopy.castShadow=true;group.add(canopy);
+
+  const transform = new THREE.Object3D();
+  for (const [mat, items] of batches) {
+    const instances = new THREE.InstancedMesh(unitBox, mat, items.length);
+    items.forEach((item, i) => {
+      transform.position.set(item.x, item.y, item.z);
+      transform.rotation.set(0, 0, item.rz);
+      transform.scale.set(item.w, item.h, item.d); transform.updateMatrix();
+      instances.setMatrixAt(i, transform.matrix);
+    });
+    instances.castShadow = true; instances.receiveShadow = true;
+    instances.computeBoundingBox(); instances.computeBoundingSphere();
+    group.add(instances);
   }
+
+  // Distant vegetation silhouettes remain outside both player bounds and fences.
+  const treeGeometry = new THREE.ConeGeometry(1, 1, 7);
+  const trees = new THREE.InstancedMesh(treeGeometry, material(0x4b5940), 64);
+  for (let i = 0; i < 64; i++) {
+    const angle = i * Math.PI * 2 / 64;
+    const radius = 80 + Math.sin(i * 7.3) * 6;
+    const height = 6 + (i % 5);
+    transform.position.set(Math.cos(angle) * radius, height / 2 - 0.2, Math.sin(angle) * radius);
+    transform.rotation.set(0, i, 0); transform.scale.set(3 + i % 3, height, 3 + i % 3); transform.updateMatrix();
+    trees.setMatrixAt(i, transform.matrix);
+  }
+  trees.computeBoundingSphere(); group.add(trees);
   return group;
 }
