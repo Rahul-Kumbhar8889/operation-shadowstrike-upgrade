@@ -152,3 +152,10 @@ Exact `/health` already existed in the earlier multiplayer fix. If that exact
 URL returns the application's “Not found” response, verify the deployed commit,
 service URL and entrypoint rather than assuming the current source lacks the
 route. A local passing test cannot establish which code Render is running.
+
+## Operations-building graphics proof
+
+The unmerged Phase 1 branch includes an original GLB operations building and
+self-hosted CC0 Poly Haven PBR maps. See [matched screenshots, scope and validation](docs/operations-proof.md)
+and [asset sources and licenses](public/assets/operations/ASSET-SOURCES.md).
+The other buildings and existing gameplay/networking remain unchanged.

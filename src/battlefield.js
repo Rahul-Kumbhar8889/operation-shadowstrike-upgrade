@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { createEnvironmentTextures } from './environmentTextures.js';
+import { createOperationsProof } from './operationsProof.js';
 
 // All solid detail stays inside existing obstacle volumes or outside ±45 play bounds.
 // This module never adds collision bodies or changes authoritative game geometry.
-export function createBattlefield(scene, obstacles, ground) {
+export function createBattlefield(scene, obstacles, ground, renderer) {
   const group = new THREE.Group();
   group.name = 'MilitaryCompound';
   scene.add(group);
@@ -36,12 +37,17 @@ export function createBattlefield(scene, obstacles, ground) {
   const lamp = material(0xd2c6a1, { emissive: 0xffd393, emissiveIntensity: 0.25 });
   const unitBox = new THREE.BoxGeometry(1, 1, 1);
   const batches = new Map();
+  const operationsFallback = new THREE.Group(); operationsFallback.name = 'OperationsFallback';
+  group.add(operationsFallback);
+  let owner = group;
   function box(mat, x, y, z, w, h, d, rz = 0) {
-    if (!batches.has(mat)) batches.set(mat, []);
-    batches.get(mat).push({ x, y, z, w, h, d, rz });
+    const key = `${owner.uuid}:${mat.uuid}`;
+    if (!batches.has(key)) batches.set(key, { mat, owner, items: [] });
+    batches.get(key).items.push({ x, y, z, w, h, d, rz });
   }
 
   obstacles.forEach(({ x, z, w, h, d, mesh }, index) => {
+    owner = index === 0 ? operationsFallback : group;
     // Keep the original mesh for raycasts/collision; render a detailed solid shell.
     // Its silhouette and every roof attachment fit within the original box.
     mesh.material.visible = false;
@@ -66,7 +72,7 @@ export function createBattlefield(scene, obstacles, ground) {
       faceMaterial.polygonOffsetUnits = -2;
       const face = new THREE.Mesh(new THREE.PlaneGeometry(width, height), faceMaterial);
       face.position.set(px, py, pz); face.rotation.y = rotation;
-      group.add(face);
+      owner.add(face);
       return face;
     }
     // Sealed service panels, not enterable doorways or transparent windows.
@@ -98,6 +104,7 @@ export function createBattlefield(scene, obstacles, ground) {
     const map = new THREE.CanvasTexture(canvas); map.colorSpace = THREE.SRGBColorSpace;
     const sign = material(0xffffff, { map, roughness: 1 });
     facade(sign, x, Math.min(h - 0.55, 2.25), z + d / 2, Math.min(w - 0.4, 1.65), 0.4);
+    owner = group;
   });
 
   // Perimeter compound dressing is beyond the movement boundary. Never place
@@ -150,7 +157,7 @@ export function createBattlefield(scene, obstacles, ground) {
   }
 
   const transform = new THREE.Object3D();
-  for (const [mat, items] of batches) {
+  for (const { mat, owner: batchOwner, items } of batches.values()) {
     const instances = new THREE.InstancedMesh(unitBox, mat, items.length);
     items.forEach((item, i) => {
       transform.position.set(item.x, item.y, item.z);
@@ -160,7 +167,7 @@ export function createBattlefield(scene, obstacles, ground) {
     });
     instances.castShadow = true; instances.receiveShadow = true;
     instances.computeBoundingBox(); instances.computeBoundingSphere();
-    group.add(instances);
+    batchOwner.add(instances);
   }
 
   // Distant vegetation silhouettes remain outside both player bounds and fences.
@@ -175,5 +182,6 @@ export function createBattlefield(scene, obstacles, ground) {
     trees.setMatrixAt(i, transform.matrix);
   }
   trees.computeBoundingSphere(); group.add(trees);
+  createOperationsProof(group, obstacles[0], operationsFallback, renderer);
   return group;
 }

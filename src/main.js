@@ -359,7 +359,7 @@ addBox(0, -15, 4, 2, 4, 0x766a51);
 addBox(-4, 4, 3, 2, 3, 0x766a51);
 addBox(5, 3, 3, 2, 3, 0x766a51);
 
-createBattlefield(scene, obstacles, ground);
+createBattlefield(scene, obstacles, ground, renderer);
 const combatFX = createCombatEffects(scene);
 
 function collides(x, z, radius = 0.38) {

@@ -1,0 +1,236 @@
+{
+  "available": true,
+  "resolution_limit": 1024,
+  "materials": [
+    {
+      "name": "concrete",
+      "asset_id": "gravel_concrete_03",
+      "source": "https://polyhaven.com/a/gravel_concrete_03",
+      "license": "CC0-1.0",
+      "attribution_required": false,
+      "ao_available": true,
+      "albedo": "concrete-albedo.webp",
+      "normal": "concrete-normal.webp",
+      "orm": "concrete-orm.png",
+      "sources": [
+        {
+          "channel": "diff",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/1k/gravel_concrete_03/gravel_concrete_03_diff_1k.png",
+          "sha256": "a6fd62df2706e5a23ba490a5c5f0c3863ce5fa97f25d1fcf55c5bd692477f309",
+          "source_md5": "0ff1bee1f4451c36fd1441dd1265c769"
+        },
+        {
+          "channel": "nor_gl",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/1k/gravel_concrete_03/gravel_concrete_03_nor_gl_1k.png",
+          "sha256": "76297cad88a30ccd754921b2e8a4175e29f4e15e8480ecdd1a72a7e03a8acf27",
+          "source_md5": "d2842e38171372256fac3d9598c8b237"
+        },
+        {
+          "channel": "rough",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/1k/gravel_concrete_03/gravel_concrete_03_rough_1k.png",
+          "sha256": "181cff70aa4f6a51c0b002d0c33ae06bd799a9d631f6019326eaa6bd4938fb79",
+          "source_md5": "a83906b3d2c1e7ebff29bec83171ed80"
+        },
+        {
+          "channel": "ao",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/1k/gravel_concrete_03/gravel_concrete_03_ao_1k.png",
+          "sha256": "2a70a77f4628398a007c569b5507cc799a4a537a318f64d6413dca2f46e8df43",
+          "source_md5": "45e6228822cfbb46c8796e4ed48f9319"
+        }
+      ],
+      "authors": {
+        "Charlotte Baglioni": "All"
+      },
+      "asset_name": "Gravel Concrete 03",
+      "source_scale": null,
+      "optimized_files": {
+        "albedo": {
+          "sha256": "0372a28296c27ea9198b7130f61ce673f9a81e876c4fc3cdd1fe5d63d2248078",
+          "bytes": 349462
+        },
+        "normal": {
+          "sha256": "e111dea835a18d7d4a596cb2030056f85c787166af71ab00aab6964f75f2ea9f",
+          "bytes": 1443926
+        },
+        "orm": {
+          "sha256": "60bf1d4fbfa49afb0223b20de2ef255cda950bdca260adc5b53ee4201fb9314f",
+          "bytes": 500133
+        }
+      }
+    },
+    {
+      "name": "metal",
+      "asset_id": "metal_plate",
+      "source": "https://polyhaven.com/a/metal_plate",
+      "license": "CC0-1.0",
+      "attribution_required": false,
+      "ao_available": true,
+      "albedo": "metal-albedo.webp",
+      "normal": "metal-normal.webp",
+      "orm": "metal-orm.png",
+      "sources": [
+        {
+          "channel": "diff",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/1k/metal_plate/metal_plate_diff_1k.png",
+          "sha256": "00401b4ce56f0ffa8b2c1e10366fa36a7a9b839199b3abac2678790a9883c2e9",
+          "source_md5": "a507a35fb1b0cfb8fea92682fb36e3a1"
+        },
+        {
+          "channel": "nor_gl",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/1k/metal_plate/metal_plate_nor_gl_1k.png",
+          "sha256": "d858021ebc0a2a01ec13e574bc47ed58795e129904cda2868b3fb2dfd02d6741",
+          "source_md5": "970b1bfeb59ec31a165341e05757dfc3"
+        },
+        {
+          "channel": "rough",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/1k/metal_plate/metal_plate_rough_1k.png",
+          "sha256": "aa6e4947c33559a7012e275d1600bfa6e00c2824271726a94de69f1a7b7fed2e",
+          "source_md5": "cd6e9d5693a7efdac715e15072dde2a9"
+        },
+        {
+          "channel": "ao",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/1k/metal_plate/metal_plate_ao_1k.png",
+          "sha256": "70653401fb0f992daf58c7b51cc4aef469bf0e4eed484c6ad1d57c93e50ae361",
+          "source_md5": "56f4440908f2878a1101aa05b26fd222"
+        },
+        {
+          "channel": "metal",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/1k/metal_plate/metal_plate_metal_1k.png",
+          "sha256": "394ee114df29630336322edbbd3ca9a7782b040deea58f620b0e298c973c6ace",
+          "source_md5": "1f3433cbac41eb3d2ce7bbe46521d35f"
+        }
+      ],
+      "authors": {
+        "Rob Tuytel": "All"
+      },
+      "asset_name": "Metal Plate",
+      "source_scale": null,
+      "optimized_files": {
+        "albedo": {
+          "sha256": "8561826e33747bacad7a4a1c6fcf0a868ca880520c067bbc48a7f8a1e1c9df37",
+          "bytes": 165868
+        },
+        "normal": {
+          "sha256": "4f6289d37612dfe9ab4462d040b1a6b10706febd6803c84754c91ce2008bf62f",
+          "bytes": 1380092
+        },
+        "orm": {
+          "sha256": "542194a779c841302a5fb5609ca08cbd311044f0a430a51b3db87f3b66fe158b",
+          "bytes": 7009
+        }
+      }
+    },
+    {
+      "name": "asphalt",
+      "asset_id": "asphalt_02",
+      "source": "https://polyhaven.com/a/asphalt_02",
+      "license": "CC0-1.0",
+      "attribution_required": false,
+      "ao_available": true,
+      "albedo": "asphalt-albedo.webp",
+      "normal": "asphalt-normal.webp",
+      "orm": "asphalt-orm.png",
+      "sources": [
+        {
+          "channel": "diff",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/1k/asphalt_02/asphalt_02_diff_1k.png",
+          "sha256": "68f85c76965ea664d500839c7ffe28fc7f2ddd297db32323dd63976589316bd3",
+          "source_md5": "ac3d05aae774a5dce71a31b8c761fa47"
+        },
+        {
+          "channel": "nor_gl",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/1k/asphalt_02/asphalt_02_nor_gl_1k.png",
+          "sha256": "b2069741070f0107c81d001eabfffd6d6644f249cd4ffdf52852e4b5e746a959",
+          "source_md5": "910d4b3882858368622eaa1b973bb290"
+        },
+        {
+          "channel": "rough",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/1k/asphalt_02/asphalt_02_rough_1k.png",
+          "sha256": "aa820bd79355a4b5a94e14915f275584080a071c45a218a13ca61c2840158300",
+          "source_md5": "7db5fbd81763e89539cc0d808a97449e"
+        },
+        {
+          "channel": "ao",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/1k/asphalt_02/asphalt_02_ao_1k.png",
+          "sha256": "baef7dbfc709700f4caeb8ec96282f56996deaaf066abe6e978758f2e14c2373",
+          "source_md5": "67782606ab946aee870e6cf8051501f6"
+        }
+      ],
+      "authors": {
+        "Rob Tuytel": "All"
+      },
+      "asset_name": "Asphalt 02",
+      "source_scale": "3M x 3M",
+      "optimized_files": {
+        "albedo": {
+          "sha256": "292d477bf7053a9aa3ef8000dc9c6f76c3410c23973197f8934df1bfe98c4e4b",
+          "bytes": 487994
+        },
+        "normal": {
+          "sha256": "b43847d34d749745cb2d84a76f04b4148a174371bd353ab9958828c363412c25",
+          "bytes": 2164296
+        },
+        "orm": {
+          "sha256": "213e675795b06e78abc290578734f63b612e8a2b3ac9e5da14719090ca985195",
+          "bytes": 1784406
+        }
+      }
+    },
+    {
+      "name": "ground",
+      "asset_id": "brown_mud_leaves_01",
+      "source": "https://polyhaven.com/a/brown_mud_leaves_01",
+      "license": "CC0-1.0",
+      "attribution_required": false,
+      "ao_available": true,
+      "albedo": "ground-albedo.webp",
+      "normal": "ground-normal.webp",
+      "orm": "ground-orm.png",
+      "sources": [
+        {
+          "channel": "diff",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/1k/brown_mud_leaves_01/brown_mud_leaves_01_diff_1k.png",
+          "sha256": "17506c4b1c5000ed5add829f1de825e851fcd8ffc4b8ed16c45b551ade935ea1",
+          "source_md5": "9cd7fd7f230b6ce9e051b4e08e6ad6ec"
+        },
+        {
+          "channel": "nor_gl",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/1k/brown_mud_leaves_01/brown_mud_leaves_01_nor_gl_1k.png",
+          "sha256": "0c5c37348830b6a36024a114359e26aaf2f48bf2b435a5ef2d6999bcd4b530b7",
+          "source_md5": "bfa4b76dc2218b8b953d3eb2055fafad"
+        },
+        {
+          "channel": "rough",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/1k/brown_mud_leaves_01/brown_mud_leaves_01_rough_1k.png",
+          "sha256": "e2c9d83b00cbb851978865b6ad3e3a760d5cd6c522b849a9c6de2cf3cc681628",
+          "source_md5": "7e36e2f136e9e495c36127d45e6feb7a"
+        },
+        {
+          "channel": "ao",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/1k/brown_mud_leaves_01/brown_mud_leaves_01_ao_1k.png",
+          "sha256": "1f2496658306960333e9711701f2f7be5ff715d97a785a8b0768e99b2fd46bec",
+          "source_md5": "e48a4257493cbdfe12058dd0e8f74312"
+        }
+      ],
+      "authors": {
+        "Rob Tuytel": "All"
+      },
+      "asset_name": "Brown Mud Leaves 01",
+      "source_scale": null,
+      "optimized_files": {
+        "albedo": {
+          "sha256": "d58fa0f110f0633c54fb1055b8fee5aafe25cd683af12464a00a41e9d23dd75f",
+          "bytes": 516532
+        },
+        "normal": {
+          "sha256": "6a598b66fb7f03f07bc947b13ace6564baa9381cf66829c2bd3326460d76186c",
+          "bytes": 2614492
+        },
+        "orm": {
+          "sha256": "6168db8b17c5601c56536fad8ffae8b6459575843f7859012c95e9898c51130f",
+          "bytes": 4775
+        }
+      }
+    }
+  ]
+}
