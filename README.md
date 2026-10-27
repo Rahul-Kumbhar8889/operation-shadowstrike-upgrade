@@ -80,10 +80,17 @@ server's memory; it does not locate a server or connect computers by itself.
 1. In Render choose **New → Static Site**, connect this repository and branch.
    Use build command `npm install --no-audit --no-fund && npm run build` and
    publish directory `dist`.
-2. Before building, set `VITE_SOCKET_SERVER_URL` to the backend's public HTTPS
-   origin, for example `https://operation-shadowstrike-server.onrender.com`.
-   This is a public build-time value, not a secret. Do not use localhost,
-   a private IP, a `ws://` URL, or append `/socket.io`.
+2. The committed `.env.production` configures `npm run build` with
+   `VITE_SOCKET_SERVER_URL=https://operation-shadowstrike-upgrade.onrender.com`.
+   The client reads this Vite value and connects to that backend's `/socket.io`
+   endpoint instead of the static site's origin. This public URL is not a secret.
+   No manual frontend variable is needed when the host loads the committed Vite
+   configuration normally. If your frontend host already defines
+   `VITE_SOCKET_SERVER_URL`, **manually set it to this exact URL or remove the
+   override**: hosting/build-process variables take precedence over the file.
+   When changing backends, set this variable in the **frontend hosting service's
+   build environment**, not only on the Node backend, and rebuild/redeploy.
+   Do not use localhost, a private IP, a `ws://` URL, or append `/socket.io`.
 3. Deploy. Set the backend's `CORS_ORIGINS` to the actual static site's HTTPS
    origin and redeploy the backend if the origin differs from the initial value.
 4. Both players must open this same deployed game (or builds configured with
@@ -91,9 +98,12 @@ server's memory; it does not locate a server or connect computers by itself.
    A change to `VITE_SOCKET_SERVER_URL` requires a fresh frontend build/deploy.
 
 For local development leave `VITE_SOCKET_SERVER_URL` unset and run the two
-Quick start commands. To use a public backend locally, copy `.env.example` to
-`.env`, set the real URL, allow the local frontend origin in `CORS_ORIGINS`, and
-restart Vite. The server defaults to port 3001 and permits only
+Quick start commands. Vite does not load `.env.production` in development, so
+requests still go through the local `/socket.io` proxy to port 3001. Remove any
+existing shell or local `.env` overrides if you want that local workflow.
+To use Render during development, copy `.env.example` to the ignored `.env.local`,
+allow the local frontend origin in the backend's `CORS_ORIGINS`, and restart Vite.
+`.env.example` alone is documentation and is not automatically loaded by Vite. The server defaults to port 3001 and permits only
 `http://localhost:5173` and `http://127.0.0.1:5173` unless `CORS_ORIGINS` is set.
 Requests without an Origin header (health probes and command-line clients) are
 accepted. Origin checks are browser access policy, not player authentication.
