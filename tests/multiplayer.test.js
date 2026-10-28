@@ -163,3 +163,19 @@ test('five kills ends combat; rematch requires both players and resets score', a
     const hit=event(b,'player-hit');a.emit('shoot',{direction:{x:1,y:0,z:0}});assert.equal((await hit).hp,75);
   } finally {a.disconnect();b.disconnect();}
 });
+
+test('new weapons use server ammunition and shotgun resolves eight pellets per shell',async()=>{
+ const a=await client('websocket'),b=await client('websocket');
+ try{
+  const room=await a.timeout(2000).emitWithAck('create-room');await b.timeout(2000).emitWithAck('join-room',room.code);
+  let changed=event(a,'weapon-state',s=>s.weapon==='shotgun');a.emit('weapon-change','shotgun');assert.equal((await changed).ammo.shotgun,8);
+  await new Promise(r=>setTimeout(r,950));
+  let pellets=0;const count=()=>pellets++;b.on('player-hit',count);
+  const hit=event(b,'player-hit',s=>s.hp===4);const spent=event(a,'weapon-state',s=>s.ammo.shotgun===7);
+  a.emit('shoot',{direction:{x:1,y:0,z:0}});await hit;await spent;b.off('player-hit',count);assert.equal(pellets,8);
+  changed=event(a,'weapon-state',s=>s.weapon==='smg');a.emit('weapon-change','smg');assert.equal((await changed).ammo.smg,35);
+  await new Promise(r=>setTimeout(r,100));const killed=event(b,'player-killed');a.emit('shoot',{direction:{x:1,y:0,z:0}});await killed;
+  changed=event(a,'weapon-state',s=>s.weapon==='lmg');a.emit('weapon-change','lmg');assert.equal((await changed).ammo.lmg,75);
+  await new Promise(r=>setTimeout(r,130));const lmg=event(a,'weapon-state',s=>s.ammo.lmg===74);a.emit('shoot',{direction:{x:0,y:0,z:1}});await lmg;
+ }finally{a.disconnect();b.disconnect();}
+});

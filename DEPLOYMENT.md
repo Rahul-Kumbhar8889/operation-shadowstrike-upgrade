@@ -56,3 +56,9 @@ node scripts/browser-smoke.mjs
 The smoke check launches the production server, verifies story start/retry/menu and training, then joins a room from two isolated browser contexts. It saves a screenshot under `artifacts/`. This checks browser sessions on one machine, not two physical devices.
 
 For the extended health/death/restart/menu browser check, run `node scripts/browser-smoke.mjs --death`. This waits for real guard fire in the first mission.
+
+## Expanded tactical upgrade
+
+Six selectable weapons (keys 1–6): AR-4, SR-8, P-12, suppressed Spectre SMG, Breacher eight-pellet shotgun, Sentinel LMG. Hold left mouse for automatic weapons. Weapons share one catalogue on server/client; the server resolves shotgun pellets and consumes one shell.
+
+Each original operation now spans a 210m movement area, five enterable installations, five ordered terminal objectives and extraction, with 12–14 guards. Follow the numbered objective; clear guards within 12m before interacting. It is not necessary to kill every guard on the map. The operator is an original 1.9m articulated model with tapered torso, bent elbows/knees, camouflage, curved armor, face detail and merged mesh batches. It is procedural, not a photorealistic scanned character.

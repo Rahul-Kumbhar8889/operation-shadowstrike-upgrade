@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { createSoldier } from "./soldier.js";
+import { createEnvironmentTextures } from "./environmentTextures.js";
 import {
   MISSIONS,
   missionWalls,
@@ -15,6 +16,9 @@ export function createCampaign({
   message,
   tracer,
 }) {
+  const textures=createEnvironmentTextures();
+  const baseColliders=[...obstacles];
+  const baseWorld=scene.children.filter(o=>!o.isLight && o!==player);
   const group = new THREE.Group();
   scene.add(group);
   group.visible = false;
@@ -70,19 +74,32 @@ export function createCampaign({
       if (o.material) ms.add(o.material);
     });
     gs.forEach((g) => g.dispose());
-    ms.forEach((m) => m.dispose());
+    ms.forEach((m) => {if(m.map?.isCanvasTexture && !Object.values(textures).includes(m.map))m.map.dispose();m.dispose();});
     group.clear();
   }
   function start(index = 0) {
     cleanup();
+    obstacles.length=0;
+    for(const o of baseWorld)o.visible=false;
     failure.hidden = true;
-    state = { index, status: "active", intel: false };
+    state = { index, status: "active", intel: false, step:0 };
     time = 0;
     group.visible = true;
     panel.hidden = false;
-    const m = MISSIONS[index],
-      [x, z] = m.building;
-    for (const [a, b, w, h, d] of missionWalls(m.building)) {
+    const m = MISSIONS[index];
+    const floor=mesh(new THREE.PlaneGeometry(230,230),index===1?0x5a655a:0x8a8061,0,-.02,0);floor.rotation.x=-Math.PI/2;floor.material.map=textures.ground;floor.material.color.set(0xffffff);
+    const treeGeometry=new THREE.ConeGeometry(2.7,9,7),treeMaterial=new THREE.MeshStandardMaterial({color:0x42533c});
+    const trees=new THREE.InstancedMesh(treeGeometry,treeMaterial,100),dummy=new THREE.Object3D();
+    for(let n=0;n<100;n++){const angle=n/100*Math.PI*2,r=118+(n%7)*2;dummy.position.set(Math.cos(angle)*r,4.5,Math.sin(angle)*r);dummy.scale.setScalar(1+(n%4)*.18);dummy.updateMatrix();trees.setMatrixAt(n,dummy.matrix);}group.add(trees);
+    for(let n=0;n<m.sites.length-1;n++){
+      const [ax,az]=m.sites[n],[bx,bz]=m.sites[n+1],length=Math.hypot(bx-ax,bz-az);
+      const road=mesh(new THREE.PlaneGeometry(5,length),0x727366,(ax+bx)/2,.005,(az+bz)/2);road.rotation.x=-Math.PI/2;road.rotation.z=-Math.atan2(bx-ax,bz-az);
+    }
+    for(let i=0;i<m.sites.length;i++){
+    const [x,z]=m.sites[i], objective=m.steps[i].position;
+    // Every installation is entered through a real doorway and interior passage.
+
+    for (const [a, b, w, h, d] of missionWalls([x,z])) {
       const o = {
         x: a,
         z: b,
@@ -91,6 +108,7 @@ export function createCampaign({
         d,
         mesh: mesh(new THREE.BoxGeometry(w, h, d), 0x8c927d, a, h / 2, b),
       };
+      o.mesh.material.map=textures.concrete;
       obstacles.push(o);
       colliders.push(o);
     }
@@ -99,21 +117,34 @@ export function createCampaign({
     mesh(
       new THREE.BoxGeometry(1.3, 0.9, 0.65),
       0x394a40,
-      m.objective[0],
+      objective[0],
       0.5,
-      m.objective[1],
+      objective[1],
     );
     const terminal = mesh(
       new THREE.BoxGeometry(0.8, 0.5, 0.1),
       0x38e9ad,
-      m.objective[0],
+      objective[0],
       1.2,
-      m.objective[1],
+      objective[1],
     );
     terminal.material.emissive.set(0x1f926a);
     const light = new THREE.PointLight(0xc6dec9, 18, 11);
     light.position.set(x, 2.8, z);
     group.add(light);
+    const labelCanvas=document.createElement('canvas');labelCanvas.width=512;labelCanvas.height=64;
+    const ctx=labelCanvas.getContext('2d');ctx.fillStyle='#14251d';ctx.fillRect(0,0,512,64);ctx.fillStyle='#d9e5ca';ctx.font='bold 24px monospace';ctx.textAlign='center';ctx.fillText(`${i+1} / ${m.actions[i]}`,256,42);
+    const texture=new THREE.CanvasTexture(labelCanvas);texture.colorSpace=THREE.SRGBColorSpace;
+    const sign=mesh(new THREE.PlaneGeometry(7,.8),0xffffff,x,2.7,z+4.2);sign.material.map=texture;
+    // Interior desks and equipment establish scale without closing the passage.
+    mesh(new THREE.BoxGeometry(1.8,.75,.7),0x485348,x-2,.4,z-2.6);
+    mesh(new THREE.BoxGeometry(.7,1.8,.5),0x303c35,x+3,1,z-2.8);
+    }
+    // Long lanes, cargo cover and a marked extraction landing pad.
+    for(let n=0;n<6;n++){
+      const x=-5,z=55-n*22,w=5,h=3,d=12;
+      const item={x,z,w,h,d,mesh:mesh(new THREE.BoxGeometry(w,h,d),0x4d594c,x,h/2,z)};obstacles.push(item);colliders.push(item);
+    }
     beacon = mesh(
       new THREE.TorusGeometry(2, 0.09, 8, 48),
       0x57d7ff,
@@ -125,7 +156,7 @@ export function createCampaign({
     enemies = m.guards.map(([a, b], i) => {
       const model = createSoldier(0x75664a);
       model.position.set(a, 0, b);
-      if (blocked(a, b, missionWalls(m.building))) model.position.z += 1;
+      if (blocked(a, b, obstacles.map(o=>[o.x,o.z,o.w,o.h,o.d]))) model.position.z += 1;
       group.add(model);
       return {
         model,
@@ -135,7 +166,7 @@ export function createCampaign({
         lastFire: 0,
       };
     });
-    onReset({ x, z: z + 11 });
+    onReset({ x:m.building[0], z:m.building[1]+15 });
     paint();
     message(m.brief);
   }
@@ -144,24 +175,16 @@ export function createCampaign({
       left = enemies.filter((e) => e.hp > 0).length;
     q("h2").textContent = m.name;
     q(".brief").textContent = m.brief;
-    q(".objective").textContent =
-      state.status === "failed"
-        ? "MISSION FAILED — restart to retry"
-        : state.status === "complete"
-          ? "MISSION COMPLETE — extraction secured"
-          : left
-            ? `Neutralize security: ${left} guards remaining`
-            : !state.intel
-              ? `Enter building • E to ${m.action.toLowerCase()}`
-              : "Intel secured • reach cyan extraction ring and press E";
+    const step=state.step||0, current=m.steps[step];
+    q('.objective').textContent=state.status==='failed'?'MISSION FAILED':state.status==='complete'?'OPERATION COMPLETE':current?`OBJECTIVE ${step+1}/5: ${current.action} • E near terminal • ${left} guards alive`:'REACH EXTRACTION • Clear nearby guards and press E';
     q(".next").hidden = state.status !== "complete";
     q(".next").textContent =
       state.index === 2 ? "REPLAY CAMPAIGN" : "NEXT OPERATION";
     const ctx = q(".radar").getContext("2d");
     ctx.fillStyle = "#101e20";
     ctx.fillRect(0, 0, 280, 150);
-    const center = MISSIONS[state.index].building,
-      scale = 3;
+    const center = [0,0],
+      scale = .64;
     const px = (x) => 140 + (x - center[0]) * scale,
       pz = (z) => 65 + (z - center[1]) * scale;
     ctx.fillStyle = "#637367";
@@ -173,7 +196,7 @@ export function createCampaign({
         o.d * scale,
       );
     ctx.fillStyle = "#84efb6";
-    ctx.fillRect(px(m.objective[0]) - 3, pz(m.objective[1]) - 3, 6, 6);
+    for(const s of m.steps.slice(state.step||0))ctx.fillRect(px(s.position[0])-3,pz(s.position[1])-3,6,6);
     ctx.strokeStyle = "#57d7ff";
     ctx.beginPath();
     ctx.arc(px(m.extract[0]), pz(m.extract[1]), 5, 0, Math.PI * 2);
@@ -203,7 +226,7 @@ export function createCampaign({
     ctx.restore();
     ctx.fillStyle = "#acbdba";
     ctx.font = "10px monospace";
-    const point = state.intel ? m.extract : m.objective;
+    const point = state.intel ? m.extract : m.steps[state.step||0].position;
     ctx.fillText(
       `${state.intel ? "EXTRACTION" : "TERMINAL"} ${Math.round(Math.hypot(player.position.x - point[0], player.position.z - point[1]))}m | N ↑`,
       8,
@@ -296,18 +319,18 @@ export function createCampaign({
     state = interactMission(
       state,
       player.position,
-      enemies.filter((e) => e.hp > 0).length,
+      enemies.filter((e) => e.hp > 0 && e.model.position.distanceTo(player.position)<12).length,
     );
     if (state !== before) {
       message(
         state.status === "complete"
           ? "OPERATION COMPLETE"
-          : "OBJECTIVE SECURED — PROCEED TO EXTRACTION",
+          : state.intel ? "ALL OBJECTIVES SECURED — PROCEED TO EXTRACTION" : "OBJECTIVE COMPLETE — NEXT INSTALLATION MARKED",
       );
       if (state.status === "complete") document.exitPointerLock?.();
     } else if (state.status === "active")
       message(
-        "Secure all guards, then approach the terminal. E interacts within 2.4 metres.",
+        "Follow the numbered objective. Clear guards within 12m, then press E within 2.4m of its terminal.",
       );
     paint();
   }
@@ -317,6 +340,7 @@ export function createCampaign({
     hit,
     interact,
     aimMeshes,
+    get bounds(){return 105;},
     get active() {
       return state.status !== "inactive";
     },
@@ -337,6 +361,8 @@ export function createCampaign({
       panel.hidden = true;
       failure.hidden = true;
       group.visible = false;
+      obstacles.splice(0,obstacles.length,...baseColliders);
+      for(const o of baseWorld)o.visible=true;
     },
     setExit(fn) {
       exit = fn;

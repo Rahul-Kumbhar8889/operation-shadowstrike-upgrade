@@ -30,11 +30,15 @@ try {
   await host.goto(base);
   await host.click('#campaign');
   await host.waitForSelector('#missionPanel:not([hidden])');
-  assert.match(await host.locator('#missionPanel h2').innerText(), /SILENT ENTRY/);
+  assert.match(await host.locator('#missionPanel h2').innerText(), /RAILWAY INTERDICTION/);
   await host.click('#missionPanel .retry');
   assert.match(await host.locator('#stats').innerText(), /HP: 1000\b/);
   await mkdir('artifacts', {recursive:true});
   await host.screenshot({path:'artifacts/mission-start.png'});
+  await host.keyboard.press('KeyV');
+  await host.screenshot({path:'artifacts/operator-upgrade.png'});
+  await host.keyboard.press('KeyV');
+  for(const [key,name] of [['Digit4','SMG'],['Digit5','SHOTGUN'],['Digit6','MACHINE GUN']]){await host.keyboard.press(key);assert.ok((await host.locator('#weaponName').innerText()).includes(name));}
   if (process.argv.includes('--death')) {
     await host.evaluate(() => {
       window.healthChanges=[1000];

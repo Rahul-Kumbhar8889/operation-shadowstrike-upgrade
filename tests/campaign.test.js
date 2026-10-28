@@ -14,11 +14,16 @@ for (let index = 0; index < MISSIONS.length; index++) {
     assert.equal(interactMission(initial, pos(m.extract), 0), initial);
     assert.equal(interactMission(initial, pos(m.objective), 1), initial);
     assert.equal(interactMission(initial, { x: 44, z: 44 }, 0), initial);
-    const intel = interactMission(initial, pos(m.objective), 0);
-    assert.equal(intel.intel, true);
-    const complete = interactMission(intel, pos(m.extract), 0);
-    assert.equal(complete.status, "complete");
-    assert.equal(interactMission(complete, pos(m.objective), 0), complete);
+    let progress=initial;
+    for(let step=0;step<m.steps.length;step++){
+      if(step+1<m.steps.length)assert.equal(interactMission(progress,pos(m.steps[step+1].position),0),progress,'cannot skip objectives');
+      assert.equal(interactMission(progress,pos(m.steps[step].position),1),progress,'nearby guard blocks interaction');
+      progress=interactMission(progress,pos(m.steps[step].position),0);
+      assert.equal(progress.step,step+1);
+    }
+    assert.equal(progress.intel,true);
+    const complete=interactMission(progress,pos(m.extract),0);assert.equal(complete.status,'complete');
+    assert.equal(interactMission(complete,pos(m.objective),0),complete);
     const failed = { ...initial, status: "failed" };
     assert.equal(interactMission(failed, pos(m.objective), 0), failed);
   });
@@ -72,4 +77,8 @@ test('story health survives fourteen guard bullets and reaches zero on bullet fi
     assert.equal(hp,20);
     assert.equal(Math.max(0,hp-mission.damage),0);
   }
+});
+
+test('expanded operations have five separate installations, long routes and guarded extraction',()=>{
+ for(const m of MISSIONS){assert.equal(m.steps.length,5);assert.ok(m.guards.length>=12);let distance=0;let last=m.building;for(const step of m.steps){distance+=Math.hypot(step.position[0]-last[0],step.position[1]-last[1]);last=step.position;}distance+=Math.hypot(m.extract[0]-last[0],m.extract[1]-last[1]);assert.ok(distance>250);}
 });

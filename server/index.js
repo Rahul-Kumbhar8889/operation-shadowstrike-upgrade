@@ -1,3 +1,4 @@
+import { WEAPONS, createAmmo, shotDirections } from '../shared/weapons.js';
 import { createServer } from 'node:http';
 import { Server } from 'socket.io';
 import { createReadStream } from 'node:fs';
@@ -63,35 +64,6 @@ const SCORE_LIMIT = 5;
 const RESPAWN_MS = 3000;
 const MAX_DISTANCE = 80;
 
-const WEAPONS = {
-  assault: {
-    name: 'ASSAULT RIFLE',
-    magazine: 30,
-    damage: 25,
-    targetDamage: 50,
-    fireInterval: 150,
-    reloadMs: 1200,
-  },
-
-  sniper: {
-    name: 'SNIPER RIFLE',
-    magazine: 5,
-    damage: 75,
-    targetDamage: 100,
-    fireInterval: 1200,
-    reloadMs: 2200,
-  },
-
-  pistol: {
-    name: 'PISTOL',
-    magazine: 12,
-    damage: 20,
-    targetDamage: 40,
-    fireInterval: 350,
-    reloadMs: 1000,
-  },
-};
-
 const DEFAULT_WEAPON = 'assault';
 
 const obstacles = [
@@ -122,12 +94,6 @@ function createTargets() {
         alive: true,
       },
     ])
-  );
-}
-
-function createAmmo() {
-  return Object.fromEntries(
-    Object.entries(WEAPONS).map(([id, weapon]) => [id, weapon.magazine])
   );
 }
 
@@ -654,7 +620,8 @@ io.on('connection', (socket) => {
       z: shooter.position.z,
     };
 
-    let wallDistance = Infinity;
+    for (const dir of shotDirections(data.direction, weapon)) {
+    let wallDistance = weapon.range;
 
     for (const box of obstacles) {
       wallDistance = Math.min(wallDistance, rayBoxDistance(origin, dir, box));
@@ -707,7 +674,7 @@ io.on('connection', (socket) => {
       distance: Math.min(closestDistance, MAX_DISTANCE),
     });
 
-    if (!closest) return;
+    if (!closest) continue;
 
     // ============================================
     // TARGET DAMAGE
@@ -737,7 +704,7 @@ io.on('connection', (socket) => {
         });
       }
 
-      return;
+      continue;
     }
 
     // ============================================
@@ -816,6 +783,7 @@ io.on('connection', (socket) => {
     }
 
     sendState(code, room);
+    }
   });
 
   // ==============================================

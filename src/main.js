@@ -1,3 +1,4 @@
+import { WEAPONS, createAmmo, shotDirections } from '../shared/weapons.js';
 import * as THREE from 'three';
 import { createLobbyConnection } from './multiplayerConnection.js';
 import { createBattlefield } from './battlefield.js';
@@ -14,51 +15,18 @@ import { CAMPAIGN_MAX_HP } from '../shared/campaign.js';
 const app = document.querySelector('#app');
 const $ = (selector) => document.querySelector(selector);
 
-const WEAPONS = {
-  assault: {
-    name: 'ASSAULT RIFLE',
-    short: 'ASSAULT',
-    magazine: 30,
-    damage: 25,
-    targetDamage: 50,
-    fireInterval: 150,
-    reloadMs: 1200,
-  },
-  sniper: {
-    name: 'SNIPER RIFLE',
-    short: 'SNIPER',
-    magazine: 5,
-    damage: 75,
-    targetDamage: 100,
-    fireInterval: 1200,
-    reloadMs: 2200,
-  },
-  pistol: {
-    name: 'PISTOL',
-    short: 'PISTOL',
-    magazine: 12,
-    damage: 20,
-    targetDamage: 40,
-    fireInterval: 350,
-    reloadMs: 1000,
-  },
-};
-
 const weaponIds = Object.keys(WEAPONS);
 
 let currentWeapon = 'assault';
 
-let ammoByWeapon = {
-  assault: 30,
-  sniper: 5,
-  pistol: 12,
-};
+let ammoByWeapon = createAmmo();
 
 let ammo = 30;
 let hp = 100;
 let alive = true;
 let reloading = false;
 let lastShot = 0;
+let fireHeld = false;
 let reloadToken = 0;
 
 let currentRoom = null;
@@ -81,7 +49,7 @@ app.innerHTML = `
     <span>Mouse Move - 360° Camera</span>
     <span>Left Click Shoot | R Reload</span>
     <span>Right Click Change Weapon</span>
-    <span>1 / 2 / 3 Select Weapon</span>
+    <span>1–6 Select Weapon | Hold fire: AR / SMG / LMG</span>
     <span>V Camera | M Menu | Esc Release Cursor</span>
     <span id="stats">HP: 100 | AMMO: 30/30</span>
     <span id="networkStatus">OFFLINE TRAINING</span>
@@ -431,7 +399,7 @@ function buildWeaponModel(id) {
     roughness: 0.55,
   });
 
-  if (id === 'assault') {
+  if (['assault','smg','lmg','shotgun'].includes(id)) {
     weaponBox(group, 0.18, 0.19, 0.82, dark, 0, 0, -0.32);
     weaponBox(group, 0.15, 0.15, 0.53, accent, 0, 0, -0.87);
     weaponBox(group, 0.065, 0.065, 0.54, metal, 0, 0, -1.32);
@@ -471,6 +439,9 @@ function buildWeaponModel(id) {
     group.position.z = -0.1;
   }
 
+  if(id==='smg'){group.scale.set(.85,.85,.65);weaponBox(group,.13,.13,.45,metal,0,0,-1.65);}
+  if(id==='shotgun'){group.scale.set(1,1,1.05);weaponBox(group,.19,.20,.40,accent,0,-.06,-.9);}
+  if(id==='lmg'){weaponBox(group,.40,.30,.33,dark,0,-.28,-.4);weaponBox(group,.05,.4,.05,metal,.15,-.25,-1.2);weaponBox(group,.05,.4,.05,metal,-.15,-.25,-1.2);}
   return group;
 }
 
@@ -591,7 +562,7 @@ function updateWeaponHUD() {
     `${ammo} / ${weapon.magazine}` + (reloading ? '  RELOADING...' : '');
 
   $('#weaponDamage').textContent =
-    `PVP DAMAGE: ${weapon.damage} | ` + `TARGET: ${weapon.targetDamage}`;
+    `${weapon.pellets>1 ? weapon.pellets+' × ' : ''}${weapon.damage} DAMAGE • ${weapon.range}m RANGE`;
 
   $('#weaponSlots').innerHTML = weaponIds
     .map((id, index) => {
@@ -599,7 +570,7 @@ function updateWeaponHUD() {
 
       return `
         <div style="
-          min-width:80px;
+          min-width:60px;
           padding:10px;
           border-radius:8px;
           text-align:center;
@@ -871,11 +842,7 @@ function updateScoreboard(players) {
 }
 
 function resetPlayerWeapons() {
-  ammoByWeapon = {
-    assault: 30,
-    sniper: 5,
-    pistol: 12,
-  };
+  ammoByWeapon = createAmmo();
 
   reloadToken++;
   reloading = false;
@@ -1367,9 +1334,11 @@ function shoot() {
   }
 
   ammoByWeapon[currentWeapon]--;
-
+  campaign.onShot?.(origin, weapon.noise);
+  for(const pellet of shotDirections(direction,weapon)){
+  const direction=new THREE.Vector3(pellet.x,pellet.y,pellet.z);
   raycaster.set(origin, direction);
-  raycaster.far = 80;
+  raycaster.far = weapon.range;
 
   const wallHits = raycaster.intersectObjects(obstacles.map((o) => o.mesh));
 
@@ -1377,10 +1346,10 @@ function shoot() {
     [...targets.values()].filter((t) => t.alive).map((t) => t.mesh)
   );
 
-  const wallDistance = wallHits[0]?.distance ?? Infinity;
+  const wallDistance = wallHits[0]?.distance ?? weapon.range;
   const targetHit = targetHits[0];
   if (campaign.active && campaign.hit(origin,direction,weapon.damage,wallDistance)) {
-    showHitMarker();playHitConfirmation();bulletTracer(origin,direction,Math.min(wallDistance,40));updateHUD();return;
+    showHitMarker();playHitConfirmation();bulletTracer(origin,direction,Math.min(wallDistance,40));updateHUD();continue;
   }
 
 
@@ -1417,6 +1386,7 @@ function shoot() {
     }
   }
 
+  }
   updateHUD();
 }
 
@@ -1485,7 +1455,7 @@ renderer.domElement.addEventListener('pointerdown', (event) => {
     return;
   }
 
-  if (event.button === 0) shoot();
+  if (event.button === 0) { fireHeld=true;shoot(); }
   if (event.button === 2) nextWeapon();
 });
 
@@ -1493,7 +1463,8 @@ renderer.domElement.addEventListener('contextmenu', (event) =>
   event.preventDefault()
 );
 
-document.addEventListener('pointerlockchange', updateMouseHint);
+document.addEventListener('pointerlockchange', () => {fireHeld=false;updateMouseHint();});
+window.addEventListener('pointerup',()=>{fireHeld=false;});
 
 document.addEventListener('mousemove', (event) => {
   if (!mouseLocked() || !gameActive()) return;
@@ -1523,6 +1494,9 @@ window.addEventListener('keydown', (event) => {
   if (event.code === 'Digit1') selectWeapon('assault');
   if (event.code === 'Digit2') selectWeapon('sniper');
   if (event.code === 'Digit3') selectWeapon('pistol');
+  if (event.code === 'Digit4') selectWeapon('smg');
+  if (event.code === 'Digit5') selectWeapon('shotgun');
+  if (event.code === 'Digit6') selectWeapon('lmg');
 
   if (event.code === 'KeyZ' && currentWeapon === 'sniper') {
     scoped = !scoped;
@@ -1535,6 +1509,7 @@ window.addEventListener('keyup', (event) => {
 });
 
 window.addEventListener('blur', () => {
+  fireHeld=false;
   for (const key in keys) keys[key] = false;
 });
 
@@ -1548,6 +1523,7 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.05);
 
   let moving = false;
+  if(fireHeld && mouseLocked() && gameActive() && alive && WEAPONS[currentWeapon].automatic)shoot();
 
   const sprinting = !!keys.ShiftLeft || !!keys.ShiftRight;
 
@@ -1570,9 +1546,9 @@ function animate() {
       const oldX = soldier.position.x;
       const oldZ = soldier.position.z;
 
-      const nextX = THREE.MathUtils.clamp(oldX + dx, -45, 45);
+      const nextX = THREE.MathUtils.clamp(oldX + dx, campaign.active?-campaign.bounds:-45, campaign.active?campaign.bounds:45);
 
-      const nextZ = THREE.MathUtils.clamp(oldZ + dz, -45, 45);
+      const nextZ = THREE.MathUtils.clamp(oldZ + dz, campaign.active?-campaign.bounds:-45, campaign.active?campaign.bounds:45);
 
       if (!collides(nextX, oldZ)) {
         soldier.position.x = nextX;
