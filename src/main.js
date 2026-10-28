@@ -1351,7 +1351,8 @@ function getAimDirection() {
 // ==============================================
 
 function shoot() {
-  if (!alive || reloading || (campaign.active && !campaign.running)) return;
+  if (!alive || reloading) return;
+  if (campaign.active && !campaign.running) { showMessage(coopMode ? 'CO-OP PAUSED: JOIN BOTH PLAYERS, THEN PRESS ENTER TO START' : 'MISSION IS NOT ACTIVE'); return; }
 
   const weapon = WEAPONS[currentWeapon];
 
@@ -1532,10 +1533,10 @@ function updateMouseHint() {
 }
 
 renderer.domElement.addEventListener('pointerdown', (event) => {
-  if(touchControls.enabled)return;
+  if(event.pointerType==='touch')return;
   if (!gameActive() || !alive || (campaign.active && !campaign.running&&!campaign.canExplore)) return;
 
-  if (!mouseLocked()) {
+  if (document.pointerLockElement !== renderer.domElement) {
     if (event.button === 0) {
       renderer.domElement.requestPointerLock?.();
     }
