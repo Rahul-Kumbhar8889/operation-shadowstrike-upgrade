@@ -1,14 +1,13 @@
 services:
   - type: web
-    name: operation-shadowstrike-server
+    name: shadowstrike-tactical-missions
     runtime: node
     plan: free
-    buildCommand: npm install --omit=dev --no-audit --no-fund
-    # Run the same entrypoint covered by the integration tests.
-    startCommand: node server/index.js
+    buildCommand: npm ci --include=dev --no-audit --no-fund && npm run build
+    startCommand: npm start
     healthCheckPath: /health
     envVars:
       - key: NODE_VERSION
         value: 22.22.0
-      - key: CORS_ORIGINS
-        sync: false
+      - key: NODE_ENV
+        value: production

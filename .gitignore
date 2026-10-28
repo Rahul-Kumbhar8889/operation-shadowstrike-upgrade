@@ -6,3 +6,7 @@ dist/
 # Local Vite overrides may contain developer-specific values.
 .env.local
 .env.*.local
+
+# Generated visual verification output
+artifacts/
+.verification/

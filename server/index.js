@@ -1,5 +1,11 @@
 import { createServer } from 'node:http';
 import { Server } from 'socket.io';
+import { createReadStream } from 'node:fs';
+import { stat } from 'node:fs/promises';
+import { resolve, extname, sep } from 'node:path';
+const publicRoot = resolve('dist');
+const MIME = {'.html':'text/html; charset=utf-8','.js':'text/javascript','.css':'text/css','.glb':'model/gltf-binary','.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp','.svg':'image/svg+xml','.json':'application/json'};
+
 
 // OPERATION SHADOWSTRIKE
 // STEP 19B - ADVANCED WEAPON SERVER
@@ -9,7 +15,7 @@ const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http:
   .split(',').map((origin) => origin.trim()).filter(Boolean);
 const originAllowed = (origin) => !origin || allowedOrigins.includes(origin);
 
-const httpServer = createServer((req, res) => {
+const httpServer = createServer(async (req, res) => {
   // Match the path independently of query strings and a trailing slash.
   const pathname = new URL(req.url, 'http://localhost').pathname;
   if ((req.method === 'GET' || req.method === 'HEAD') &&
@@ -17,6 +23,20 @@ const httpServer = createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     res.end(JSON.stringify({ status: 'ok' }));
     return;
+  }
+  if (req.method === 'GET' || req.method === 'HEAD') {
+    try {
+      const requested = decodeURIComponent(pathname);
+      const file = resolve(publicRoot, '.' + (requested === '/' ? '/index.html' : requested));
+      if (file.startsWith(publicRoot + sep) && (await stat(file)).isFile()) {
+        res.writeHead(200, {'Content-Type': MIME[extname(file)] || 'application/octet-stream',
+          'Cache-Control': requested.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache',
+          'X-Content-Type-Options':'nosniff'});
+        if (req.method === 'HEAD') res.end();
+        else createReadStream(file).on('error',()=>res.destroy()).pipe(res);
+        return;
+      }
+    } catch { /* Missing assets receive 404; never expose source files. */ }
   }
   res.writeHead(req.url === '/' ? 200 : 404, { 'Content-Type': 'text/plain' });
   res.end(req.url === '/' ? 'Operation Shadowstrike multiplayer server' : 'Not found');
@@ -28,13 +48,18 @@ const io = new Server(httpServer, {
     methods: ['GET', 'POST'],
   },
   // CORS alone does not restrict WebSocket handshakes.
-  allowRequest: (req, callback) => callback(null, originAllowed(req.headers.origin)),
+  allowRequest: (req, callback) => {
+    let sameOrigin = false;
+    try { sameOrigin = new URL(req.headers.origin).host === req.headers.host; } catch {}
+    callback(null, sameOrigin || originAllowed(req.headers.origin));
+  },
   transports: ['websocket', 'polling'],
 });
 
 const rooms = new Map();
 
 const MAX_HP = 100;
+const SCORE_LIMIT = 5;
 const RESPAWN_MS = 3000;
 const MAX_DISTANCE = 80;
 
@@ -141,7 +166,11 @@ function allTargets(room) {
   return [...room.targets.values()];
 }
 
+function roundState(room) {
+  return { winner: room.winner || null, scoreLimit: SCORE_LIMIT, ready: [...(room.ready || [])] };
+}
 function sendState(code, room) {
+  io.to(code).emit('round-state', roundState(room));
   io.to(code).emit('game-state', allPlayers(room));
 }
 
@@ -304,6 +333,7 @@ function leaveRoom(socket) {
   }
 
   room.players.delete(socket.id);
+  room.ready?.delete(socket.id);
 
   socket.to(code).emit('player-left', socket.id);
 
@@ -357,6 +387,7 @@ function roomResponse(socket, room, code, spawn) {
     players: allPlayers(room),
     targets: allTargets(room),
     weapons: WEAPONS,
+    round: roundState(room),
   };
 }
 
@@ -383,6 +414,8 @@ io.on('connection', (socket) => {
     const room = {
       players: new Map(),
       targets: createTargets(),
+      winner: null,
+      ready: new Set(),
     };
 
     rooms.set(code, room);
@@ -556,13 +589,31 @@ io.on('connection', (socket) => {
   // SHOOTING
   // ==============================================
 
+  socket.on('request-rematch', () => {
+    const code=socket.data.roomCode, room=rooms.get(code);
+    if(!room?.winner || !room.players.has(socket.id))return;
+    room.ready.add(socket.id);
+    if(room.players.size===2 && [...room.players.keys()].every(id=>room.ready.has(id))) {
+      room.winner=null;room.ready.clear();room.targets=createTargets();
+      for(const [id,p] of room.players) {
+        clearTimeout(p.respawnTimer);p.respawnTimer=null;cancelReload(p);
+        Object.assign(p,{position:spawnFor(p.slot),hp:MAX_HP,alive:true,kills:0,deaths:0,
+          ammo:createAmmo(),weapon:DEFAULT_WEAPON,lastShot:0,lastMove:Date.now()});
+        io.to(code).emit('player-respawned',{id,position:p.position,hp:MAX_HP,weapon:DEFAULT_WEAPON});
+        const targetSocket=io.sockets.sockets.get(id);if(targetSocket)sendAmmo(targetSocket,p);
+      }
+      io.to(code).emit('targets-reset',allTargets(room));
+    }
+    sendState(code,room);
+  });
+
   socket.on('shoot', (data) => {
     const code = socket.data.roomCode;
     const room = rooms.get(code);
 
     const shooter = room?.players.get(socket.id);
 
-    if (!shooter || !shooter.alive) {
+    if (!shooter || !shooter.alive || room.winner) {
       return;
     }
 
@@ -711,6 +762,7 @@ io.on('connection', (socket) => {
       target.deaths++;
 
       shooter.kills++;
+      if(shooter.kills >= SCORE_LIMIT) room.winner=socket.id;
 
       cancelReload(target);
 

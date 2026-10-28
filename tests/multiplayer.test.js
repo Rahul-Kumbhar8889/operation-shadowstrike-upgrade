@@ -54,7 +54,16 @@ test('Render health route accepts query strings, trailing slash and HEAD', async
   assert.equal(await head.text(), '');
   assert.equal((await fetch(`${base}/health-invalid`)).status, 404);
   assert.equal((await fetch(`${base}/health`, { method: 'POST' })).status, 404);
-  assert.match(await fetch(base).then(response => response.text()), /Operation Shadowstrike multiplayer server/);
+  assert.match(await fetch(base).then(response => response.text()), /Operation Shadowstrike/i);
+});
+
+test('same-origin deployment permits multiplayer and never serves source files', async () => {
+  const socket = await client('websocket', base);
+  try { assert.equal((await socket.timeout(2000).emitWithAck('create-room')).ok,true); }
+  finally {socket.disconnect();}
+  for(const path of ['/server/index.js','/.env.production','/package.json','/%2e%2e%2fpackage.json']) {
+    assert.equal((await fetch(base+path)).status,404,path);
+  }
 });
 
 test('health, dynamic PORT, exact CORS origins, and denied browser origins', async () => {
@@ -128,4 +137,29 @@ test('lobby timeout on an unresponsive server leaves no stale listeners', async 
     assert.equal(lobby.socket.listeners('connect').length, 0);
     assert.equal(lobby.socket.listeners('connect_error').length, 0);
   } finally { lobby.cancel(); silent.closeAllConnections(); await new Promise(resolve => silent.close(resolve)); }
+});
+
+test('five kills ends combat; rematch requires both players and resets score', async () => {
+  const a=await client('websocket'), b=await client('websocket');
+  try {
+    const room=await a.timeout(2000).emitWithAck('create-room');
+    await b.timeout(2000).emitWithAck('join-room',room.code);
+    for(let kill=0;kill<5;kill++) {
+      const dead=event(b,'player-killed');
+      const respawn=event(b,'player-respawned');
+      for(let shot=0;shot<4;shot++) {
+        const hit=event(b,'player-hit');a.emit('shoot',{direction:{x:1,y:0,z:0}});await hit;
+        await new Promise(r=>setTimeout(r,160));
+      }
+      await dead;await respawn;
+    }
+    const state=event(a,'round-state',s=>s.winner===a.id&&s.ready.length===1);
+    a.emit('request-rematch');assert.equal((await state).winner,a.id);
+    let damage=false;const mark=()=>damage=true;b.on('player-hit',mark);
+    a.emit('shoot',{direction:{x:1,y:0,z:0}});await new Promise(r=>setTimeout(r,200));
+    b.off('player-hit',mark);assert.equal(damage,false,'round result blocks further damage');
+    const reset=event(a,'game-state',players=>players.length===2&&players.every(p=>p.kills===0&&p.deaths===0&&p.hp===100));
+    b.emit('request-rematch');await reset;
+    const hit=event(b,'player-hit');a.emit('shoot',{direction:{x:1,y:0,z:0}});assert.equal((await hit).hp,75);
+  } finally {a.disconnect();b.disconnect();}
 });

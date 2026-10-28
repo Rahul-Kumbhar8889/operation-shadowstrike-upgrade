@@ -1,3 +1,5 @@
+> **Tactical mission branch:** see [DEPLOYMENT.md](DEPLOYMENT.md) for the new three-mission story mode, controls, single-service Render deployment, verification and explicit scope. Existing documentation below records the original multiplayer game.
+
 # OPERATION SHADOWSTRIKE — Tactical Multiplayer Shooter
 
 An original IGI-inspired Three.js tactical shooter built from the supplied project source. This package **does not include or redistribute Project IGI game assets**.

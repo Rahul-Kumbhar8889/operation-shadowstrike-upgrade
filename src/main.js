@@ -5,6 +5,7 @@ import { createSoldier } from './soldier.js';
 import { getWeaponImage } from './weaponImages.js';
 import { createCombatEffects, playReload, playHitConfirmation, playElimination } from './combatEffects.js';
 import './style.css';
+import { createCampaign } from './campaign.js';
 
 // OPERATION SHADOWSTRIKE
 // STEP 19B - ADVANCED WEAPONS + WEAPON IMAGE HUD
@@ -80,7 +81,7 @@ app.innerHTML = `
     <span>Left Click Shoot | R Reload</span>
     <span>Right Click Change Weapon</span>
     <span>1 / 2 / 3 Select Weapon</span>
-    <span>Esc Release Cursor</span>
+    <span>V Camera | M Menu | Esc Release Cursor</span>
     <span id="stats">HP: 100 | AMMO: 30/30</span>
     <span id="networkStatus">OFFLINE TRAINING</span>
   </div>
@@ -109,6 +110,8 @@ app.innerHTML = `
       />
 
       <button id="joinRoom">JOIN ROOM</button>
+      <button id="campaign">STORY OPERATIONS — 3 MISSIONS</button>
+      <p class="mode-rules">Story: clear guards, secure intel, extract alive.<br>Multiplayer: 1v1 combat, first to 5 kills wins; both players agree to rematch.<br>Desktop keyboard + mouse required.</p>
       <button id="training" class="secondary">SOLO TRAINING</button>
 
       <p id="roomStatus" role="status" aria-live="polite">Ready to connect</p>
@@ -123,7 +126,7 @@ app.innerHTML = `
   </div>
 
   <div id="scoreboard" class="hidden">
-    <div class="score-title">LIVE SCOREBOARD</div>
+    <div class="score-title">LIVE SCOREBOARD</div><p id="roundStatus">FIRST TO 5 KILLS</p><button id="rematch" class="hidden">READY FOR REMATCH</button>
     <div id="scoreRows">Waiting for players...</div>
   </div>
 
@@ -380,6 +383,13 @@ const soldier = createSoldier(0x304b39);
 scene.add(soldier);
 
 const remotePlayers = new Map();
+let firstPerson = false;
+const campaign = createCampaign({scene, obstacles, player:soldier, message:showMessage, tracer:bulletTracer,
+  onDamage(damage) { hp=Math.max(0,hp-damage); flashDamage();updateHUD();if(hp===0){alive=false;campaign.fail();}},
+  onReset(position) { alive=true;hp=100;resetPlayerWeapons();resetTargets([]);soldier.position.set(position.x,0,position.z);soldier.visible=true;firstPerson=true;yaw=0;pitch=0;updateHUD(); }
+});
+campaign.setExit(leaveGame);
+
 
 function weaponBox(parent, w, h, d, material, x, y, z) {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
@@ -612,7 +622,7 @@ function updateHUD() {
     `HP: ${hp} | ` +
     `${WEAPONS[currentWeapon].short}: ` +
     `${ammo}/${WEAPONS[currentWeapon].magazine} | ` +
-    `TARGETS: ${targetKills}/5`;
+    (campaign.active ? 'STORY OPERATION' : `TARGETS: ${targetKills}/5`);
 }
 
 function selectWeapon(id, notifyServer = true) {
@@ -866,7 +876,9 @@ function resetPlayerWeapons() {
 }
 
 function enterRoom(response) {
+  campaign.stop();firstPerson=false;
   currentRoom = response.code;
+  updateRound(response.round);
   multiplayerActive = true;
 
   alive = true;
@@ -930,7 +942,14 @@ $('#joinRoom').onclick = () => {
   requestRoom('join-room', code);
 };
 
+$('#campaign').onclick = () => {
+  lobbyConnection.cancel();multiplayerActive=false;currentRoom=null;clearRemotePlayers();
+  $('#lobby').classList.add('hidden');$('#networkStatus').textContent='STORY OPERATIONS';
+  campaign.start(0);updateMouseHint();
+};
 $('#training').onclick = () => {
+  campaign.stop();alive=true;hp=100;soldier.position.set(0,0,0);
+
   lobbyConnection.cancel();
   resetPlayerWeapons();
   resetTargets();
@@ -954,6 +973,7 @@ $('#copyCode').onclick = async () => {
 };
 
 function leaveGame() {
+  campaign.stop();firstPerson=false;soldier.position.set(0,0,0);
   currentRoom = null;
   multiplayerActive = false;
 
@@ -991,6 +1011,16 @@ $('#leaveRoom').onclick = leaveGame;
 // SOCKET EVENTS
 // ==============================================
 
+function updateRound(round) {
+  if(!round)return;
+  $('#roundStatus').textContent=round.winner ? `${round.winner===socket.id?'VICTORY':'ROUND LOST'} • ${(round.ready||[]).length}/2 ready for rematch` : `FIRST TO ${round.scoreLimit} KILLS`;
+  $('#rematch').classList.toggle('hidden',!round.winner);
+  $('#rematch').disabled=(round.ready||[]).includes(socket.id);
+  if(round.winner && mouseLocked())document.exitPointerLock();
+}
+$('#rematch').onclick=()=>socket.emit('request-rematch');
+socket.on('round-state', round=>{if(multiplayerActive)updateRound(round);});
+socket.on('targets-reset', list=>{if(multiplayerActive)resetTargets(list);});
 socket.on('player-joined', (player) => {
   if (!multiplayerActive) return;
   addRemotePlayer(player);
@@ -1258,6 +1288,7 @@ function getAimDirection() {
   raycaster.far = 100;
 
   const aimObjects = [
+    ...campaign.aimMeshes(),
     ...obstacles.map((o) => o.mesh),
     ...[...targets.values()].filter((t) => t.alive).map((t) => t.mesh),
     ...[...remotePlayers.values()]
@@ -1290,7 +1321,7 @@ function getAimDirection() {
 // ==============================================
 
 function shoot() {
-  if (!alive || reloading) return;
+  if (!alive || reloading || (campaign.active && !campaign.running)) return;
 
   const weapon = WEAPONS[currentWeapon];
 
@@ -1339,6 +1370,10 @@ function shoot() {
 
   const wallDistance = wallHits[0]?.distance ?? Infinity;
   const targetHit = targetHits[0];
+  if (campaign.active && campaign.hit(origin,direction,weapon.damage,wallDistance)) {
+    showHitMarker();playHitConfirmation();bulletTracer(origin,direction,Math.min(wallDistance,40));updateHUD();return;
+  }
+
 
   const distance = Math.min(wallDistance, targetHit?.distance ?? Infinity, 80);
 
@@ -1377,7 +1412,7 @@ function shoot() {
 }
 
 function reload() {
-  if (!alive || reloading) return;
+  if (!alive || reloading || (campaign.active && !campaign.running)) return;
 
   const id = currentWeapon;
   const weapon = WEAPONS[id];
@@ -1472,6 +1507,9 @@ window.addEventListener('keydown', (event) => {
   if (event.repeat) return;
 
   if (event.code === 'KeyR') reload();
+  if (event.code === 'KeyE' && campaign.active) campaign.interact();
+  if (event.code === 'KeyV') firstPerson=!firstPerson;
+  if (event.code === 'KeyM') leaveGame();
 
   if (event.code === 'Digit1') selectWeapon('assault');
   if (event.code === 'Digit2') selectWeapon('sniper');
@@ -1504,7 +1542,7 @@ function animate() {
 
   const sprinting = !!keys.ShiftLeft || !!keys.ShiftRight;
 
-  if (gameActive() && alive && mouseLocked()) {
+  if (gameActive() && alive && mouseLocked() && (!campaign.active || campaign.running)) {
     const speed = (sprinting ? 9 : 5) * dt;
 
     const forward = Number(!!keys.KeyW) - Number(!!keys.KeyS);
@@ -1545,13 +1583,23 @@ function animate() {
 
   soldier.userData.updateAnimation?.(dt, moving, sprinting);
 
-  const cameraOffset = new THREE.Vector3(0.95, 2.75, 4.8);
+  campaign.update(dt,gameActive() && alive && mouseLocked());
+  soldier.visible = alive && !firstPerson;
+  const cameraOffset = firstPerson ? new THREE.Vector3(0,1.7,0) : new THREE.Vector3(0.95, 2.75, 4.8);
 
   cameraOffset.applyAxisAngle(UP, yaw);
 
   const desiredPosition = soldier.position.clone().add(cameraOffset);
 
-  camera.position.lerp(desiredPosition, Math.min(1, dt * 10));
+  // Pull the third-person camera in before walls instead of showing through cover.
+  if (!firstPerson) {
+    const eye=soldier.position.clone().add(new THREE.Vector3(0,1.7,0));
+    const offset=desiredPosition.clone().sub(eye);
+    raycaster.set(eye,offset.clone().normalize());raycaster.far=offset.length();
+    const obstruction=raycaster.intersectObjects(obstacles.map(o=>o.mesh),false)[0];
+    if(obstruction)desiredPosition.copy(eye).add(offset.normalize().multiplyScalar(Math.max(.1,obstruction.distance-.2)));
+  }
+  camera.position.copy(desiredPosition);
 
   const horizontal = Math.cos(pitch);
 
