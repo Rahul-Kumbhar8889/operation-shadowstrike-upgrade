@@ -179,3 +179,27 @@ test('new weapons use server ammunition and shotgun resolves eight pellets per s
   await new Promise(r=>setTimeout(r,130));const lmg=event(a,'weapon-state',s=>s.ammo.lmg===74);a.emit('shoot',{direction:{x:0,y:0,z:1}});await lmg;
  }finally{a.disconnect();b.disconnect();}
 });
+
+test('server owns grenade inventory, blast damage, injections and smoke replication',async()=>{
+ const a=await client('websocket'),b=await client('websocket');
+ try{
+  const room=await a.timeout(2000).emitWithAck('create-room');await b.timeout(2000).emitWithAck('join-room',room.code);
+  assert.equal(room.equipment.frag,3);
+  assert.equal((await a.timeout(2000).emitWithAck('use-equipment',{type:'injection'})).ok,false,'cannot waste healing at full HP');
+  assert.equal((await a.timeout(2000).emitWithAck('use-equipment',{type:'frag',direction:{x:99,y:0,z:0}})).ok,false);
+  const hit=event(b,'player-hit',d=>d.weapon==='frag');
+  const ownInventory=event(a,'weapon-state',d=>d.equipment?.frag===2);
+  assert.equal((await a.timeout(2000).emitWithAck('use-equipment',{type:'frag',direction:{x:0,y:-1,z:0}})).ok,true);
+  await ownInventory;
+  const damage=await hit;assert.equal(damage.hp,20);assert.equal(damage.damage,80);
+  const heal=event(b,'equipment-healed',d=>d.id===b.id);
+  assert.equal((await b.timeout(2000).emitWithAck('use-equipment',{type:'injection'})).ok,true);assert.equal((await heal).hp,55);
+  assert.equal((await b.timeout(2000).emitWithAck('use-equipment',{type:'injection'})).ok,false,'cooldown blocks duplicate use');
+  const smoke=event(b,'equipment-resolved',d=>d.type==='smoke');
+  assert.equal((await a.timeout(2000).emitWithAck('use-equipment',{type:'smoke',direction:{x:0,y:-1,z:0}})).ok,true);
+  assert.equal((await smoke).duration,16);
+  const hitAgain=event(b,'player-hit',d=>d.weapon==='frag');
+  assert.equal((await a.timeout(2000).emitWithAck('use-equipment',{type:'frag',direction:{x:0,y:-1,z:0}})).ok,true);
+  assert.equal((await hitAgain).hp,0,'grenade kills through smoke; smoke is concealment, not armor');
+ }finally{a.disconnect();b.disconnect();}
+});

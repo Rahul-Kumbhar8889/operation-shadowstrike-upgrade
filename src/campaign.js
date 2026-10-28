@@ -1,6 +1,8 @@
+import { blastDamage, smokeBlocks } from '../shared/equipment.js';
+import { playGunshot, playObjective } from './combatEffects.js';
 import * as THREE from "three";
 import { createSoldier } from "./soldier.js";
-import { createEnvironmentTextures } from "./environmentTextures.js";
+import { createEnvironmentTextures,createTerrainTexture } from "./environmentTextures.js";
 import {
   MISSIONS,
   missionWalls,
@@ -16,7 +18,7 @@ export function createCampaign({
   message,
   tracer,
 }) {
-  const textures=createEnvironmentTextures();
+  const textures=createEnvironmentTextures();textures.ground.dispose();textures.ground=createTerrainTexture();
   const baseColliders=[...obstacles];
   const baseWorld=scene.children.filter(o=>!o.isLight && o!==player);
   const group = new THREE.Group();
@@ -27,7 +29,7 @@ export function createCampaign({
     colliders = [],
     time = 0,
     exit = () => {},
-    beacon;
+    beacon, task=null, smokeClouds=[];
   const ray = new THREE.Raycaster(),
     panel = document.createElement("section");
   panel.id = "missionPanel";
@@ -47,7 +49,7 @@ export function createCampaign({
   failure.querySelector(".menu").onclick = () => exit();
   const q = (s) => panel.querySelector(s);
   q(".retry").onclick = () => start(state.index);
-  q(".next").onclick = () => start((state.index + 1) % 3);
+  q(".next").onclick = () => start((state.index + 1) % MISSIONS.length);
   q(".exit").onclick = () => exit();
   function mesh(geo, color, x, y, z) {
     const o = new THREE.Mesh(
@@ -66,7 +68,7 @@ export function createCampaign({
       if (i >= 0) obstacles.splice(i, 1);
     }
     colliders = [];
-    enemies = [];
+    enemies = [];task=null;smokeClouds=[];
     const gs = new Set(),
       ms = new Set();
     group.traverse((o) => {
@@ -83,14 +85,14 @@ export function createCampaign({
     for(const o of baseWorld)o.visible=false;
     failure.hidden = true;
     state = { index, status: "active", intel: false, step:0 };
-    time = 0;
+    time = 0;task=null;smokeClouds=[];
     group.visible = true;
     panel.hidden = false;
     const m = MISSIONS[index];
-    const floor=mesh(new THREE.PlaneGeometry(230,230),index===1?0x5a655a:0x8a8061,0,-.02,0);floor.rotation.x=-Math.PI/2;floor.material.map=textures.ground;floor.material.color.set(0xffffff);
+    const floor=mesh(new THREE.PlaneGeometry(330,330),index===1?0x5a655a:0x8a8061,0,-.02,0);floor.rotation.x=-Math.PI/2;floor.material.map=textures.ground;floor.material.bumpMap=textures.ground;floor.material.bumpScale=.04;floor.material.color.set(0xffffff);
     const treeGeometry=new THREE.ConeGeometry(2.7,9,7),treeMaterial=new THREE.MeshStandardMaterial({color:0x42533c});
     const trees=new THREE.InstancedMesh(treeGeometry,treeMaterial,100),dummy=new THREE.Object3D();
-    for(let n=0;n<100;n++){const angle=n/100*Math.PI*2,r=118+(n%7)*2;dummy.position.set(Math.cos(angle)*r,4.5,Math.sin(angle)*r);dummy.scale.setScalar(1+(n%4)*.18);dummy.updateMatrix();trees.setMatrixAt(n,dummy.matrix);}group.add(trees);
+    for(let n=0;n<100;n++){const angle=n/100*Math.PI*2,r=166+(n%7)*2;dummy.position.set(Math.cos(angle)*r,4.5,Math.sin(angle)*r);dummy.scale.setScalar(1+(n%4)*.18);dummy.updateMatrix();trees.setMatrixAt(n,dummy.matrix);}group.add(trees);
     for(let n=0;n<m.sites.length-1;n++){
       const [ax,az]=m.sites[n],[bx,bz]=m.sites[n+1],length=Math.hypot(bx-ax,bz-az);
       const road=mesh(new THREE.PlaneGeometry(5,length),0x727366,(ax+bx)/2,.005,(az+bz)/2);road.rotation.x=-Math.PI/2;road.rotation.z=-Math.atan2(bx-ax,bz-az);
@@ -140,6 +142,21 @@ export function createCampaign({
     mesh(new THREE.BoxGeometry(1.8,.75,.7),0x485348,x-2,.4,z-2.6);
     mesh(new THREE.BoxGeometry(.7,1.8,.5),0x303c35,x+3,1,z-2.8);
     }
+    // Perimeter terrain, checkpoint towers, fuel stores and an airfield landmark.
+    const mountainGeo=new THREE.SphereGeometry(28,20,12,0,Math.PI*2,0,Math.PI/2),mountainMat=new THREE.MeshStandardMaterial({color:0x687263,roughness:1});
+    const mountains=new THREE.InstancedMesh(mountainGeo,mountainMat,26);
+    for(let n=0;n<26;n++){const a=n/26*Math.PI*2;dummy.position.set(Math.cos(a)*205,-.5,Math.sin(a)*205);dummy.scale.set(1+(n%3)*.4,1+(n%4)*.2,1);dummy.updateMatrix();mountains.setMatrixAt(n,dummy.matrix);}group.add(mountains);
+    for(const [x,z] of [[-145,145],[145,145],[-145,-145],[145,-145]]){
+      for(const dx of [-2,2])for(const dz of [-2,2])mesh(new THREE.CylinderGeometry(.13,.17,9,6),0x454e44,x+dx,4.5,z+dz);
+      mesh(new THREE.BoxGeometry(5,.3,5),0x3d493c,x,8,z);mesh(new THREE.BoxGeometry(5.4,.2,5.4),0x3d493c,x,11,z);
+      mesh(new THREE.BoxGeometry(5,1,0.18),0x6a7666,x,8.6,z-2.5);
+    }
+    // Service installations vary by operation; all large props have colliders.
+    const prop=(x,z,w,h,d,color)=>{const item={x,z,w,h,d,mesh:mesh(new THREE.BoxGeometry(w,h,d),color,x,h/2,z)};obstacles.push(item);colliders.push(item);return item.mesh;};
+    for(let n=0;n<5;n++){const tank=mesh(new THREE.CylinderGeometry(1.4,1.4,3.2,16),0x818575,45+n*4,1.6,-5);tank.material.metalness=.4;const item={x:45+n*4,z:-5,w:2.8,h:3.2,d:2.8,mesh:tank};obstacles.push(item);colliders.push(item);}
+    const radarBase=prop(-45,110,5,6,5,0x657269);
+    const dish=mesh(new THREE.SphereGeometry(4,20,12,0,Math.PI*2,0,Math.PI/2),0xb1b9ad,-45,9,110);dish.rotation.z=.7;dish.material.side=THREE.DoubleSide;
+    if(index===3){const runway=mesh(new THREE.PlaneGeometry(18,230),0x494e49,0,.01,0);runway.rotation.x=-Math.PI/2;for(let n=0;n<20;n++){const stripe=mesh(new THREE.PlaneGeometry(.3,5),0xd0c8a5,0,.025,-105+n*11);stripe.rotation.x=-Math.PI/2;}}
     // Long lanes, cargo cover and a marked extraction landing pad.
     for(let n=0;n<6;n++){
       const x=-5,z=55-n*22,w=5,h=3,d=12;
@@ -176,15 +193,16 @@ export function createCampaign({
     q("h2").textContent = m.name;
     q(".brief").textContent = m.brief;
     const step=state.step||0, current=m.steps[step];
-    q('.objective').textContent=state.status==='failed'?'MISSION FAILED':state.status==='complete'?'OPERATION COMPLETE':current?`OBJECTIVE ${step+1}/5: ${current.action} • E near terminal • ${left} guards alive`:'REACH EXTRACTION • Clear nearby guards and press E';
+    q('.objective').textContent=state.status==='failed'?'MISSION FAILED':state.status==='complete'?'OPERATION COMPLETE':current?`OBJECTIVE ${step+1}/${m.steps.length}: ${current.action} • E near terminal • ${left} guards alive`:'REACH EXTRACTION • Clear nearby guards and press E';
+    if(task && state.status==='active')q('.objective').textContent=`${current.action} • ${Math.ceil(task.remaining)}s • Stay within 2.4m; nearby threats interrupt`;
     q(".next").hidden = state.status !== "complete";
     q(".next").textContent =
-      state.index === 2 ? "REPLAY CAMPAIGN" : "NEXT OPERATION";
+      state.index === MISSIONS.length-1 ? "REPLAY CAMPAIGN" : "NEXT OPERATION";
     const ctx = q(".radar").getContext("2d");
     ctx.fillStyle = "#101e20";
     ctx.fillRect(0, 0, 280, 150);
     const center = [0,0],
-      scale = .64;
+      scale = .43;
     const px = (x) => 140 + (x - center[0]) * scale,
       pz = (z) => 65 + (z - center[1]) * scale;
     ctx.fillStyle = "#637367";
@@ -233,11 +251,11 @@ export function createCampaign({
       142,
     );
   }
-  function lineClear(from, to) {
+  function lineClear(from, to, respectSmoke=true) {
     const dir = to.clone().sub(from);
     ray.far = dir.length();
     ray.set(from, dir.normalize());
-    return !ray.intersectObjects(
+    return (!respectSmoke || !smokeBlocks(from,to,smokeClouds,Date.now())) && !ray.intersectObjects(
       obstacles.map((o) => o.mesh),
       false,
     ).length;
@@ -245,6 +263,12 @@ export function createCampaign({
   function update(dt, running) {
     if (state.status !== "active" || !running) return;
     time += dt;
+    smokeClouds=smokeClouds.filter(c=>c.expires>Date.now());
+    if(task){const m=MISSIONS[state.index],point=m.steps[state.step||0].position;
+      const safe=Math.hypot(player.position.x-point[0],player.position.z-point[1])<=2.4 && !enemies.some(e=>e.hp>0&&e.model.position.distanceTo(player.position)<12);
+      if(!safe){task=null;message('ACTION INTERRUPTED — return to terminal and clear nearby threats');}
+      else {task.remaining-=dt;if(task.remaining<=0){task=null;completeInteraction();}}
+    }
     const boxes = obstacles.map((o) => [o.x, o.z, o.w, o.h, o.d]);
     for (const e of enemies) {
       if (e.hp <= 0) continue;
@@ -254,7 +278,7 @@ export function createCampaign({
         visible = distance < 23 && lineClear(eye, target);
       const dest = visible
         ? player.position
-        : e.home
+        : e.alertUntil>time ? e.lastKnown : e.home
             .clone()
             .add(
               new THREE.Vector3(
@@ -276,9 +300,11 @@ export function createCampaign({
       }
       if (dir.lengthSq() > 0) e.model.rotation.y = Math.atan2(-dir.x, -dir.z);
       e.model.userData.updateAnimation?.(dt, moving, false);
+      if(visible)e.model.userData.setAimDirection?.(target.clone().sub(eye));
       if (visible && time - e.lastFire > 1.35) {
         e.lastFire = time;
         e.model.userData.playRecoil?.();
+        playGunshot('assault',.25);
         tracer(eye, target.clone().sub(eye).normalize(), distance);
         onDamage(MISSIONS[state.index].damage);
         if (state.status !== "active") break;
@@ -302,19 +328,19 @@ export function createCampaign({
   function hit(origin, direction, damage, wallDistance) {
     if (state.status !== "active") return false;
     ray.set(origin, direction);
-    ray.far = Math.min(80, wallDistance);
+    ray.far = wallDistance;
     const hit = ray.intersectObjects(aimMeshes(), false)[0];
     if (!hit) return false;
     const e = hit.object.userData.guard;
     e.hp = Math.max(0, e.hp - damage);
     if (!e.hp) {
-      e.model.visible = false;
+      e.model.rotation.x=-Math.PI/2;e.model.position.y=.25;
       message("GUARD NEUTRALIZED");
     }
     paint();
     return true;
   }
-  function interact() {
+  function completeInteraction() {
     const before = state;
     state = interactMission(
       state,
@@ -322,6 +348,7 @@ export function createCampaign({
       enemies.filter((e) => e.hp > 0 && e.model.position.distanceTo(player.position)<12).length,
     );
     if (state !== before) {
+      playObjective();
       message(
         state.status === "complete"
           ? "OPERATION COMPLETE"
@@ -334,13 +361,28 @@ export function createCampaign({
       );
     paint();
   }
+  function interact(){
+    if(state.status!=='active'||task)return;
+    const m=MISSIONS[state.index],point=m.steps[state.step||0]?.position||m.extract;
+    if(Math.hypot(player.position.x-point[0],player.position.z-point[1])>2.4 || enemies.some(e=>e.hp>0&&e.model.position.distanceTo(player.position)<12)){message('Clear guards within 12m, then press E within 2.4m of the marked objective.');return;}
+    if(state.intel){completeInteraction();return;}
+    task={remaining:m.steps[state.step||0].duration};paint();
+  }
+  function blast(position){
+    if(state.status!=='active')return;
+    const origin=new THREE.Vector3(position.x,.9,position.z);
+    for(const e of enemies){if(e.hp<=0)continue;const target=e.model.position.clone().add(new THREE.Vector3(0,1,0)),damage=blastDamage(origin.distanceTo(target));if(damage && lineClear(origin,target,false)){e.hp=Math.max(0,e.hp-damage);if(!e.hp){e.model.rotation.x=-Math.PI/2;e.model.position.y=.25;}}}paint();
+  }
   return {
     start,
+    blast,
+    onShot(origin,noise){for(const e of enemies)if(e.hp>0&&e.model.position.distanceTo(origin)<noise){e.lastKnown=origin.clone();e.alertUntil=time+8;}},
+    smoke(position){smokeClouds.push({...position,expires:Date.now()+16000});},
     update,
     hit,
     interact,
     aimMeshes,
-    get bounds(){return 105;},
+    get bounds(){return 155;},
     get active() {
       return state.status !== "inactive";
     },

@@ -79,6 +79,6 @@ test('story health survives fourteen guard bullets and reaches zero on bullet fi
   }
 });
 
-test('expanded operations have five separate installations, long routes and guarded extraction',()=>{
- for(const m of MISSIONS){assert.equal(m.steps.length,5);assert.ok(m.guards.length>=12);let distance=0;let last=m.building;for(const step of m.steps){distance+=Math.hypot(step.position[0]-last[0],step.position[1]-last[1]);last=step.position;}distance+=Math.hypot(m.extract[0]-last[0],m.extract[1]-last[1]);assert.ok(distance>250);}
+test('expanded operations have six or more separate installations, long routes and guarded extraction',()=>{
+ for(const m of MISSIONS){assert.ok(m.steps.length>=6);assert.ok(m.guards.length>=16);let distance=0;let last=m.building;for(const step of m.steps){distance+=Math.hypot(step.position[0]-last[0],step.position[1]-last[1]);last=step.position;}distance+=Math.hypot(m.extract[0]-last[0],m.extract[1]-last[1]);assert.ok(distance>400);}
 });

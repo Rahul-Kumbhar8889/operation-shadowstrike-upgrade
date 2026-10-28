@@ -1,10 +1,13 @@
+import {EQUIPMENT,createEquipment,throwLanding,healHealth,smokeBlocks} from '../shared/equipment.js';
+import {createEquipmentEffects} from './equipmentEffects.js';
 import { WEAPONS, createAmmo, shotDirections } from '../shared/weapons.js';
 import * as THREE from 'three';
+import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { createLobbyConnection } from './multiplayerConnection.js';
 import { createBattlefield } from './battlefield.js';
 import { createSoldier } from './soldier.js';
 import { getWeaponImage } from './weaponImages.js';
-import { createCombatEffects, playReload, playHitConfirmation, playElimination } from './combatEffects.js';
+import { createCombatEffects, playReload, playHitConfirmation, playElimination, playFootstep, playHeal, playSmoke, playPin, playGunshot, setSoundMuted, unlockAudio } from './combatEffects.js';
 import './style.css';
 import { createCampaign } from './campaign.js';
 import { CAMPAIGN_MAX_HP } from '../shared/campaign.js';
@@ -18,6 +21,7 @@ const $ = (selector) => document.querySelector(selector);
 const weaponIds = Object.keys(WEAPONS);
 
 let currentWeapon = 'assault';
+let inventory=createEquipment(),pendingThrows=[],smokeClouds=[],lastEquipment=0,footstepTime=0,viewKick=0,soundMuted=false;
 
 let ammoByWeapon = createAmmo();
 
@@ -49,12 +53,13 @@ app.innerHTML = `
     <span>Mouse Move - 360° Camera</span>
     <span>Left Click Shoot | R Reload</span>
     <span>Right Click Change Weapon</span>
-    <span>1–6 Select Weapon | Hold fire: AR / SMG / LMG</span>
+    <span>1–9 Weapons | G Frag | B Smoke | H Injection</span>
     <span>V Camera | M Menu | Esc Release Cursor</span>
     <span id="stats">HP: 100 | AMMO: 30/30</span>
     <span id="networkStatus">OFFLINE TRAINING</span>
   </div>
 
+  <button id="soundToggle" aria-pressed="false">SOUND ON</button><div id="equipmentHUD"></div><div id="healFlash"></div><div id="smokeOverlay"></div>
   <div id="crosshair">+</div>
   <div id="hitMarker" class="hidden">✕</div>
   <div id="message"></div>
@@ -79,7 +84,8 @@ app.innerHTML = `
       />
 
       <button id="joinRoom">JOIN ROOM</button>
-      <button id="campaign">STORY OPERATIONS — 3 MISSIONS</button>
+      <select id="missionSelect" aria-label="Select story operation"><option value="0">01 / Railway Interdiction</option><option value="1">02 / Signal Blackout</option><option value="2">03 / Nightfall Extraction</option><option value="3">04 / Iron Horizon Airfield</option></select>
+      <button id="campaign">STORY OPERATIONS — 4 MISSIONS</button>
       <p class="mode-rules">Story: clear guards, secure intel, extract alive.<br>Multiplayer: 1v1 combat, first to 5 kills wins; both players agree to rematch.<br>Desktop keyboard + mouse required.</p>
       <button id="training" class="secondary">SOLO TRAINING</button>
 
@@ -255,14 +261,17 @@ app.innerHTML = `
 // ==============================================
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xbac8c5);
-scene.fog = new THREE.Fog(0xbac8c5, 48, 155);
+const skyCanvas=document.createElement('canvas');skyCanvas.width=1024;skyCanvas.height=512;
+const sky=skyCanvas.getContext('2d'),gradient=sky.createLinearGradient(0,0,0,512);gradient.addColorStop(0,'#467b9e');gradient.addColorStop(.45,'#a8c2cd');gradient.addColorStop(.55,'#ccd2bd');gradient.addColorStop(1,'#7d8368');sky.fillStyle=gradient;sky.fillRect(0,0,1024,512);
+for(let n=0;n<40;n++){const x=(n*137)%1024,y=90+(n*37)%120;const cloud=sky.createRadialGradient(x,y,1,x,y,70);cloud.addColorStop(0,'rgba(245,245,228,.12)');cloud.addColorStop(1,'rgba(245,245,228,0)');sky.fillStyle=cloud;sky.fillRect(x-70,y-70,140,140);}
+const skyTexture=new THREE.CanvasTexture(skyCanvas);skyTexture.mapping=THREE.EquirectangularReflectionMapping;skyTexture.colorSpace=THREE.SRGBColorSpace;scene.background=skyTexture;
+scene.fog = new THREE.Fog(0xbac8c5, 95, 340);
 
 const camera = new THREE.PerspectiveCamera(
   65,
   window.innerWidth / window.innerHeight,
   0.1,
-  200
+  450
 );
 
 const renderer = new THREE.WebGLRenderer({
@@ -333,6 +342,8 @@ addBox(5, 3, 3, 2, 3, 0x766a51);
 
 createBattlefield(scene, obstacles, ground, renderer);
 const combatFX = createCombatEffects(scene);
+const equipmentFX=createEquipmentEffects(scene);
+$('#soundToggle').onclick=()=>{soundMuted=!soundMuted;setSoundMuted(soundMuted);$('#soundToggle').textContent=soundMuted?'SOUND OFF':'SOUND ON';$('#soundToggle').setAttribute('aria-pressed',String(soundMuted));};
 
 function collides(x, z, radius = 0.38) {
   return obstacles.some(
@@ -369,7 +380,10 @@ campaign.setExit(leaveGame);
 
 
 function weaponBox(parent, w, h, d, material, x, y, z) {
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+  let geometry;
+  if(w<=.09&&Math.abs(w-h)<.001&&d>.3){geometry=new THREE.CylinderGeometry(w/2,w/2,d,12);geometry.rotateX(Math.PI/2);}
+  else geometry=new RoundedBoxGeometry(w,h,d,2,Math.min(w,h,d)*.15);
+  const mesh = new THREE.Mesh(geometry, material);
 
   mesh.position.set(x, y, z);
   mesh.castShadow = true;
@@ -399,7 +413,7 @@ function buildWeaponModel(id) {
     roughness: 0.55,
   });
 
-  if (['assault','smg','lmg','shotgun'].includes(id)) {
+  if (['assault','smg','lmg','shotgun','carbine','battle','marksman'].includes(id)) {
     weaponBox(group, 0.18, 0.19, 0.82, dark, 0, 0, -0.32);
     weaponBox(group, 0.15, 0.15, 0.53, accent, 0, 0, -0.87);
     weaponBox(group, 0.065, 0.065, 0.54, metal, 0, 0, -1.32);
@@ -439,6 +453,9 @@ function buildWeaponModel(id) {
     group.position.z = -0.1;
   }
 
+  if(id==='carbine')group.scale.set(1,1,.8);
+  if(id==='battle'){group.scale.set(1.15,1.05,1.08);weaponBox(group,.13,.3,.18,accent,0,-.25,-.4);}
+  if(id==='marksman'){group.scale.z=1.2;weaponBox(group,.12,.12,.35,metal,0,.23,-.5);}
   if(id==='smg'){group.scale.set(.85,.85,.65);weaponBox(group,.13,.13,.45,metal,0,0,-1.65);}
   if(id==='shotgun'){group.scale.set(1,1,1.05);weaponBox(group,.19,.20,.40,accent,0,-.06,-.9);}
   if(id==='lmg'){weaponBox(group,.40,.30,.33,dark,0,-.28,-.4);weaponBox(group,.05,.4,.05,metal,.15,-.25,-1.2);weaponBox(group,.05,.4,.05,metal,-.15,-.25,-1.2);}
@@ -475,6 +492,14 @@ function setCharacterWeapon(character, id) {
 }
 
 prepareWeaponModels(soldier);
+// Camera-mounted first-person gun uses the same original weapon geometry.
+scene.add(camera);
+const viewRig=new THREE.Group(),viewWeapons={};camera.add(viewRig);
+for(const id of weaponIds){const model=buildWeaponModel(id);model.scale.multiplyScalar(.36);model.traverse(o=>{if(o.isMesh){o.castShadow=false;o.material=o.material.clone();o.material.depthTest=false;o.material.depthWrite=false;o.renderOrder=80;}});viewRig.add(model);viewWeapons[id]=model;}
+viewRig.position.set(.23,-.25,-.48);
+for(const side of [-1,1]){const glove=new THREE.Mesh(new THREE.CapsuleGeometry(.035,.07,4,8),new THREE.MeshStandardMaterial({color:0x303b30,depthTest:false,depthWrite:false}));glove.rotation.x=Math.PI/2;glove.position.set(side===1?.025:-.025,-.065,side===1?-.02:-.27);glove.renderOrder=81;viewRig.add(glove);}
+
+
 
 // Opt-in local art study only; Vite removes this branch from production builds.
 if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('soldierPreview') === '1') {
@@ -511,7 +536,8 @@ function addRemotePlayer(data) {
 
   remote.targetRotation = data.rotation ?? 0;
   remote.group.rotation.y = remote.targetRotation;
-  remote.group.visible = data.alive !== false;
+  remote.alive=data.alive!==false;
+  remote.group.visible = remote.alive;
 
   if (WEAPONS[data.weapon]) {
     remote.weapon = data.weapon;
@@ -592,11 +618,13 @@ function updateWeaponHUD() {
     })
     .join('');
 
+  if(typeof viewWeapons!=='undefined')for(const id of weaponIds)viewWeapons[id].visible=id===currentWeapon;
   updateScope();
 }
 
 function updateHUD() {
   updateWeaponHUD();
+  $('#equipmentHUD').textContent=`G  FRAG ${inventory.frag}  •  B  SMOKE ${inventory.smoke}  •  H  INJECTION ${inventory.injection}`;
 
   $('#stats').textContent =
     `HP: ${hp} | ` +
@@ -754,6 +782,7 @@ function showMuzzleFlash() {
 }
 
 function flashDamage() {
+  playGunshot('pistol',.12);
   $('#damageFlash').classList.add('active');
 
   setTimeout(() => {
@@ -841,7 +870,8 @@ function updateScoreboard(players) {
   }
 }
 
-function resetPlayerWeapons() {
+function resetPlayerWeapons(preserveWorldEffects=false) {
+  inventory=createEquipment();lastEquipment=0;if(!preserveWorldEffects){pendingThrows=[];smokeClouds=[];equipmentFX.clear();}
   ammoByWeapon = createAmmo();
 
   reloadToken++;
@@ -861,6 +891,9 @@ function enterRoom(response) {
   hp = 100;
 
   resetPlayerWeapons();
+  inventory=response.equipment||createEquipment();
+  for(const c of response.smokes||[]){smokeClouds.push(c);equipmentFX.smoke(c,(c.expires-Date.now())/1000);}
+  updateHUD();
 
   soldier.position.set(response.spawn.x, 0, response.spawn.z);
 
@@ -921,7 +954,7 @@ $('#joinRoom').onclick = () => {
 $('#campaign').onclick = () => {
   lobbyConnection.cancel();multiplayerActive=false;currentRoom=null;clearRemotePlayers();
   $('#lobby').classList.add('hidden');$('#networkStatus').textContent='STORY OPERATIONS';
-  campaign.start(0);updateMouseHint();
+  campaign.start(Number($('#missionSelect').value));updateMouseHint();
 };
 $('#training').onclick = () => {
   campaign.stop();alive=true;hp=100;soldier.position.set(0,0,0);
@@ -988,6 +1021,7 @@ $('#leaveRoom').onclick = leaveGame;
 // ==============================================
 
 function updateRound(round) {
+  if(round?.winner){equipmentFX.clear();smokeClouds=[];pendingThrows=[];}
   if(!round)return;
   $('#roundStatus').textContent=round.winner ? `${round.winner===socket.id?'VICTORY':'ROUND LOST'} • ${(round.ready||[]).length}/2 ready for rematch` : `FIRST TO ${round.scoreLimit} KILLS`;
   $('#rematch').classList.toggle('hidden',!round.winner);
@@ -1046,7 +1080,8 @@ socket.on('game-state', (players) => {
     const remote = remotePlayers.get(player.id);
 
     if (remote) {
-      remote.group.visible = player.alive !== false;
+      remote.alive=player.alive!==false;
+      remote.group.visible=remote.alive;
 
       if (WEAPONS[player.weapon]) {
         remote.weapon = player.weapon;
@@ -1057,6 +1092,7 @@ socket.on('game-state', (players) => {
 });
 
 socket.on('weapon-state', (state) => {
+  if(state.equipment)inventory={...state.equipment};
   if (!multiplayerActive) return;
 
   if (state.ammo) {
@@ -1112,6 +1148,7 @@ socket.on('shot-fired', (data) => {
   bulletTracer(data.origin, data.direction, data.distance);
 
   if (data.shooterId !== socket.id) {
+    if(!data.pellet || data.pellet===0)playGunshot(data.weapon,.4);
     const remote = remotePlayers.get(data.shooterId);
 
     if (remote) {
@@ -1200,7 +1237,7 @@ socket.on('player-killed', (data) => {
 
   const remote = remotePlayers.get(data.victimId);
 
-  if (remote) remote.group.visible = false;
+  if (remote) {remote.alive=false;remote.group.visible = false;}
 });
 
 socket.on('player-respawned', (data) => {
@@ -1210,7 +1247,7 @@ socket.on('player-respawned', (data) => {
     alive = true;
     hp = 100;
 
-    resetPlayerWeapons();
+    resetPlayerWeapons(true);
 
     soldier.position.set(data.position.x, 0, data.position.z);
 
@@ -1228,7 +1265,7 @@ socket.on('player-respawned', (data) => {
       remote.targetPosition.set(data.position.x, 0, data.position.z);
 
       remote.group.position.copy(remote.targetPosition);
-      remote.group.visible = true;
+      remote.alive=true;remote.group.visible = true;
 
       if (WEAPONS[data.weapon]) {
         remote.weapon = data.weapon;
@@ -1315,6 +1352,7 @@ function shoot() {
   const direction = getAimDirection();
   const origin = getFiringOrigin();
 
+  viewKick=1;
   showMuzzleFlash();
   combatFX.muzzleFlash(origin, currentWeapon);
   combatFX.shellEjection(origin);
@@ -1421,6 +1459,27 @@ function reload() {
   }, weapon.reloadMs);
 }
 
+function healedEffect(){playHeal();$('#healFlash').classList.remove('active');void $('#healFlash').offsetWidth;$('#healFlash').classList.add('active');}
+function resolveEquipment(data){
+ if(data.type==='frag'){combatFX.explosion(data.position);if(!multiplayerActive&&campaign.active)campaign.blast(data.position);}
+ else {playSmoke();equipmentFX.smoke(data.position,data.duration||16);const cloud={...data.position,expires:data.expires||Date.now()+16000};smokeClouds.push(cloud);if(campaign.active)campaign.smoke(data.position);}
+}
+function useEquipment(type){
+ if(!gameActive()||!alive||(campaign.active&&!campaign.running)||(lastEquipment>0&&performance.now()-lastEquipment<950))return;
+ if(inventory[type]<=0){showMessage('EQUIPMENT DEPLETED');return;}
+ const max=campaign.active?CAMPAIGN_MAX_HP:100;
+ if(type==='injection'&&hp>=max){showMessage('HEALTH ALREADY FULL');return;}
+ lastEquipment=performance.now();unlockAudio();
+ if(multiplayerActive){socket.emit('use-equipment',{type,direction:getAimDirection()},response=>{if(!response?.ok)showMessage('EQUIPMENT NOT AVAILABLE');});return;}
+ inventory[type]--;
+ if(type==='injection'){hp=healHealth(hp,max);healedEffect();showMessage(`FIELD INJECTION — HEALTH ${hp}/${max}`);}
+ else {const landing=throwLanding(soldier.position,getAimDirection(),obstacles.map(o=>[o.x,o.z,o.w,o.h,o.d]),campaign.active?campaign.bounds:45);playPin();equipmentFX.thrown(soldier.position,landing,type,EQUIPMENT[type].fuse);pendingThrows.push({type,position:landing,remaining:EQUIPMENT[type].fuse});}
+ updateHUD();
+}
+socket.on('equipment-thrown',data=>{if(!multiplayerActive)return;playPin();equipmentFX.thrown(data.origin,data.landing,data.type,data.fuse);});
+socket.on('equipment-resolved',data=>{if(multiplayerActive)resolveEquipment(data);});
+socket.on('equipment-healed',data=>{if(multiplayerActive&&data.id===socket.id){hp=data.hp;healedEffect();updateHUD();}});
+
 // ==============================================
 // MOUSE CONTROLS
 // ==============================================
@@ -1487,6 +1546,9 @@ window.addEventListener('keydown', (event) => {
   if (event.repeat) return;
 
   if (event.code === 'KeyR') reload();
+  if (event.code === 'KeyG') useEquipment('frag');
+  if (event.code === 'KeyB') useEquipment('smoke');
+  if (event.code === 'KeyH') useEquipment('injection');
   if (event.code === 'KeyE' && campaign.active) campaign.interact();
   if (event.code === 'KeyV' && alive) firstPerson=!firstPerson;
   if (event.code === 'KeyM') leaveGame();
@@ -1497,6 +1559,9 @@ window.addEventListener('keydown', (event) => {
   if (event.code === 'Digit4') selectWeapon('smg');
   if (event.code === 'Digit5') selectWeapon('shotgun');
   if (event.code === 'Digit6') selectWeapon('lmg');
+  if (event.code === 'Digit7') selectWeapon('carbine');
+  if (event.code === 'Digit8') selectWeapon('battle');
+  if (event.code === 'Digit9') selectWeapon('marksman');
 
   if (event.code === 'KeyZ' && currentWeapon === 'sniper') {
     scoped = !scoped;
@@ -1564,6 +1629,11 @@ function animate() {
     }
   }
 
+  if(moving){footstepTime-=dt;if(footstepTime<=0){playFootstep(sprinting);footstepTime=sprinting?.25:.39;}}else footstepTime=0;
+  const equipmentRunning=gameActive()&&(!campaign.active||campaign.running);
+  if(equipmentRunning){equipmentFX.update(dt);for(let i=pendingThrows.length-1;i>=0;i--){pendingThrows[i].remaining-=dt;if(pendingThrows[i].remaining<=0){resolveEquipment(pendingThrows[i]);pendingThrows.splice(i,1);}}}
+  smokeClouds=smokeClouds.filter(c=>c.expires>Date.now());
+  $('#smokeOverlay').style.opacity=smokeClouds.some(c=>Math.hypot(soldier.position.x-c.x,soldier.position.z-c.z)<5)?'.87':'0';
   campaign.update(dt,gameActive() && alive && mouseLocked());
   const campaignDead = campaign.active && !alive;
   if (campaignDead) {
@@ -1606,13 +1676,18 @@ function animate() {
     camera.lookAt(bodyCenter);
   } else camera.lookAt(camera.position.clone().add(lookDirection));
 
+  viewKick=Math.max(0,viewKick-dt*8);
+  viewRig.visible=firstPerson&&alive&&gameActive()&&!scoped;
+  viewRig.position.set(.23+(moving?Math.sin(clock.elapsedTime*8)*.008:0),-.25+(moving?Math.abs(Math.sin(clock.elapsedTime*8))*.012:0),-.48+viewKick*.055);
+  viewRig.rotation.x=viewKick*.045+(reloading?-.35:0);
   camera.updateMatrixWorld();
 
   if (alive) {
-    soldier.userData.setAimDirection?.(getAimDirection());
+    soldier.userData.setAimDirection?.(lookDirection);
   }
 
   for (const remote of remotePlayers.values()) {
+    remote.group.visible=remote.alive!==false;
     const previous = remote.group.position.clone();
 
     remote.group.position.lerp(remote.targetPosition, Math.min(1, dt * 12));
@@ -1650,6 +1725,7 @@ function animate() {
     });
   }
 
+  for(const remote of remotePlayers.values())if(remote.group.visible && smokeBlocks(camera.position,remote.group.position,smokeClouds,Date.now()))remote.group.visible=false;
   updateEffects();
   combatFX.update(dt);
   renderer.render(scene, camera);

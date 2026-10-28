@@ -1,0 +1,5 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';
+import {createEquipment,throwLanding,healHealth,smokeBlocks,blastDamage} from '../shared/equipment.js';
+test('limited medical injections heal living operators without exceeding health cap',()=>{assert.equal(healHealth(500,1000),850);assert.equal(healHealth(900,1000),1000);assert.equal(healHealth(0,1000),0);assert.equal(healHealth(80,100,true),100);const a=createEquipment(),b=createEquipment();a.frag--;assert.equal(b.frag,3);});
+test('grenade placement stops before walls and world boundaries',()=>{const p=throwLanding({x:0,z:0},{x:1,z:0},[[5,0,2,3,4]],45);assert.ok(p.x<3.8&&p.x>3);assert.ok(throwLanding({x:44,z:0},{x:1,z:0},[],45).x<=45);assert.equal(blastDamage(9),0);assert.equal(blastDamage(0),120);});
+test('smoke blocks intersecting sight lines, including inside smoke, but expires',()=>{const clouds=[{x:0,z:0,expires:2000}];assert.ok(smokeBlocks({x:-10,z:0},{x:10,z:0},clouds,1000));assert.ok(smokeBlocks({x:0,z:0},{x:0,z:0},clouds,1000));assert.equal(smokeBlocks({x:-10,z:8},{x:10,z:8},clouds,1000),false);assert.equal(smokeBlocks({x:-10,z:0},{x:10,z:0},clouds,2000),false);});

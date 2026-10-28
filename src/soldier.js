@@ -84,13 +84,27 @@ export function createSoldier(color=0x52654b) {
     for(let row=0;row<3;row++)rounded(knee,webbing,0,-.38-row*.025,-.116,.10,.009,.014,.003);
     legs.push({hip,knee});
   }
-  const aimRig=joint(root,'AimRig',0,1.46,0);
+  // Fabric folds, boot tongues and equipment straps follow the body silhouette.
   for(const side of [-1,1]){
-    const shoulder=[side*.235,0,0],elbow=[side*.27,-.24,-.08],hand=side===1?[.12,-.22,-.39]:[-.06,-.20,-.62];
-    oval(aimRig,cloth,...shoulder,.17,.22,.20);
-    segment(aimRig,cloth,shoulder,elbow,.076,.059);oval(aimRig,cloth,...elbow,.12,.12,.12);
-    segment(aimRig,cloth,elbow,hand,.06,.043);oval(aimRig,leather,...hand,.095,.10,.13);
-    for(let finger=0;finger<3;finger++)rounded(aimRig,leather,hand[0]+(finger-1)*.023,hand[1]-.025,hand[2]-.04,.021,.06,.06,.008);
+    for(const y of [.75,.68,.59]){const fold=mesh(legs[side<0?0:1].hip,new THREE.TorusGeometry(.082,.008,4,14),cloth,0,y-.96,0);fold.rotation.x=Math.PI/2;fold.scale.z=.85;}
+    rounded(body,webbing,side*.18,1.37,.16,.025,.29,.035,.008);
+    for(let n=0;n<4;n++)rounded(body,webbing,side*.07,1.22+n*.035,.292,.08,.008,.008,.003);
+  }
+  // Small anatomical and helmet details give the face a readable human profile.
+  oval(head,skin,-.065,-.028,-.077,.07,.085,.07);oval(head,skin,.065,-.028,-.077,.07,.085,.07);
+  rounded(head,dark,.143,.061,.018,.022,.028,.14,.006);rounded(head,dark,-.143,.061,.018,.022,.028,.14,.006);
+  rounded(head,metal,0,.153,-.144,.025,.025,.012,.004);
+  const aimRig=joint(root,'AimRig',0,1.46,0);
+  const arms=[];
+  for(const side of [-1,1]){
+    const arm=joint(aimRig,side<0?'LeftShoulder':'RightShoulder',side*.235,0,0);
+    oval(arm,cloth,0,0,0,.17,.22,.20);
+    const elbowPos=[side*.035,-.24,-.08];segment(arm,cloth,[0,0,0],elbowPos,.076,.059);
+    const elbow=joint(arm,'Elbow',...elbowPos);oval(elbow,armor,0,0,.015,.115,.12,.11);
+    const hand=side===1?[-.15,.02,-.31]:[.21,.04,-.54];
+    segment(elbow,cloth,[0,0,0],hand,.06,.043);oval(elbow,leather,...hand,.095,.10,.13);
+    for(let finger=0;finger<3;finger++)rounded(elbow,leather,hand[0]+(finger-1)*.023,hand[1]-.025,hand[2]-.04,.021,.06,.06,.008);
+    arms.push({arm,elbow});
   }
   const rifle=joint(aimRig,'Rifle',.10,-.21,-.23);rifle.scale.setScalar(.62);
   rounded(rifle,metal,0,0,-.30,.15,.17,.72,.014);rounded(rifle,dark,0,0,.15,.13,.18,.35,.02);
@@ -101,9 +115,9 @@ export function createSoldier(color=0x52654b) {
   for(const part of parts){const batches=new Map();for(const child of [...part.children])if(child.isMesh){child.updateMatrix();const g=child.geometry.clone().applyMatrix4(child.matrix);if(!batches.has(child.material))batches.set(child.material,[]);batches.get(child.material).push(g);part.remove(child);child.geometry.dispose();}
     for(const [mat,geos] of batches){const combined=mergeGeometries(geos.map(g=>g.index?g.toNonIndexed():g));mesh(part,combined,mat);geos.forEach(g=>g.dispose());}}
   let walk=0,blend=0,recoil=0;
-  Object.assign(root.userData,{aimRig,rifle,muzzle,modelVersion:'anatomical-operator-v2',height:1.91});
+  Object.assign(root.userData,{aimRig,rifle,muzzle,modelVersion:'anatomical-operator-v3',height:1.91});
   root.userData.setAimDirection=direction=>{if(!direction?.lengthSq())return;root.updateWorldMatrix(true,false);const local=direction.clone().normalize().applyQuaternion(root.getWorldQuaternion(new THREE.Quaternion()).invert());aimRig.rotation.y=THREE.MathUtils.clamp(Math.atan2(-local.x,-local.z),-.75,.75);aimRig.rotation.x=THREE.MathUtils.clamp(Math.atan2(local.y,Math.hypot(local.x,local.z)),-.65,.65);head.rotation.y=aimRig.rotation.y*.6;};
   root.userData.playRecoil=()=>{recoil=1;};
-  root.userData.updateAnimation=(dt,moving=false,sprint=false)=>{dt=Math.min(dt,.05);blend=THREE.MathUtils.damp(blend,moving?1:0,10,dt);walk+=dt*(sprint?11:7);for(let i=0;i<2;i++){const phase=walk+i*Math.PI;legs[i].hip.rotation.x=Math.sin(phase)*.55*blend;legs[i].knee.rotation.x=Math.max(0,-Math.sin(phase))*.85*blend;}body.position.y=Math.abs(Math.sin(walk*2))*.018*blend;aimRig.position.y=1.46+body.position.y;recoil=Math.max(0,recoil-dt*9);rifle.position.z=-.23+recoil*.065;rifle.rotation.x=recoil*.055;};
+  root.userData.updateAnimation=(dt,moving=false,sprint=false)=>{dt=Math.min(dt,.05);blend=THREE.MathUtils.damp(blend,moving?1:0,10,dt);walk+=dt*(sprint?11:7);for(let i=0;i<2;i++){const phase=walk+i*Math.PI;legs[i].hip.rotation.x=Math.sin(phase)*.55*blend;legs[i].knee.rotation.x=Math.max(0,-Math.sin(phase))*.85*blend;}body.position.y=Math.abs(Math.sin(walk*2))*.018*blend;aimRig.position.y=1.46+body.position.y+Math.sin(walk*.45)*.002;for(let i=0;i<arms.length;i++){arms[i].arm.rotation.z=Math.sin(walk+i*Math.PI)*.025*blend;arms[i].elbow.rotation.x=Math.sin(walk)*.025*blend;}recoil=Math.max(0,recoil-dt*9);rifle.position.z=-.23+recoil*.065;rifle.rotation.x=recoil*.055;};
   return root;
 }

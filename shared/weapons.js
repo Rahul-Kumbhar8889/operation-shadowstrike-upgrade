@@ -6,6 +6,9 @@ export const WEAPONS = {
   smg:{name:'SPECTRE SUPPRESSED SMG',short:'SMG',magazine:35,damage:18,targetDamage:30,fireInterval:85,reloadMs:1400,range:40,pellets:1,automatic:true,noise:12},
   shotgun:{name:'BREACHER PUMP SHOTGUN',short:'SHOTGUN',magazine:8,damage:12,targetDamage:16,fireInterval:900,reloadMs:2300,range:24,pellets:8,spread:.075,noise:50},
   lmg:{name:'SENTINEL LIGHT MACHINE GUN',short:'LMG',magazine:75,damage:22,targetDamage:40,fireInterval:115,reloadMs:3200,range:75,pellets:1,automatic:true,noise:60},
+  carbine:{name:'VANGUARD CQB CARBINE',short:'CARBINE',magazine:40,damage:21,targetDamage:40,fireInterval:100,reloadMs:1700,range:65,pellets:1,automatic:true,noise:42},
+  battle:{name:'RAVEN HEAVY ASSAULT RIFLE',short:'RAVEN',magazine:25,damage:38,targetDamage:65,fireInterval:220,reloadMs:1800,range:90,pellets:1,automatic:true,noise:58},
+  marksman:{name:'FALCON DESIGNATED MARKSMAN',short:'DMR',magazine:15,damage:52,targetDamage:80,fireInterval:480,reloadMs:1900,range:110,pellets:1,noise:55},
 };
 export const createAmmo=()=>Object.fromEntries(Object.entries(WEAPONS).map(([id,w])=>[id,w.magazine]));
 export function shotDirections(direction, weapon) {

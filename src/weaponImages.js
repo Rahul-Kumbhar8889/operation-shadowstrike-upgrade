@@ -6,5 +6,5 @@ const pistol=wrap('<path d="M132 65H398L417 79V112H129L116 98V78Z" fill="url(#st
 const smg=wrap('<path d="M60 90H135V70H310V125H205L193 182H164L155 124H65Z" fill="url(#steel)"/><rect x="310" y="82" width="150" height="32" rx="14" fill="#263744"/><rect x="220" y="125" width="34" height="70" fill="#172129"/>');
 const shotgun=wrap('<path d="M25 96H145V80H295V116H170L110 145H45Z" fill="url(#steel)"/><rect x="290" y="84" width="210" height="15" fill="#8fa5b4"/><rect x="295" y="107" width="170" height="12" fill="#263744"/><rect x="300" y="102" width="90" height="33" rx="8" fill="#5f7166"/>');
 const lmg=wrap('<path d="M20 85H135V70H315V120H130L80 140H20Z" fill="url(#steel)"/><rect x="305" y="87" width="195" height="18" fill="#8fa5b4"/><rect x="190" y="120" width="100" height="70" rx="8" fill="#37493d"/><path d="M430 108L402 190M430 108L458 190" stroke="#8fa5b4" stroke-width="8"/>');
-export const weaponImages={assault,sniper,pistol,smg,shotgun,lmg};
+export const weaponImages={assault,sniper,pistol,smg,shotgun,lmg,carbine:assault,battle:lmg,marksman:sniper};
 export function getWeaponImage(weaponId){return weaponImages[weaponId]||assault;}

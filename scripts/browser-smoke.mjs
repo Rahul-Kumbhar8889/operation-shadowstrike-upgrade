@@ -38,7 +38,19 @@ try {
   await host.keyboard.press('KeyV');
   await host.screenshot({path:'artifacts/operator-upgrade.png'});
   await host.keyboard.press('KeyV');
-  for(const [key,name] of [['Digit4','SMG'],['Digit5','SHOTGUN'],['Digit6','MACHINE GUN']]){await host.keyboard.press(key);assert.ok((await host.locator('#weaponName').innerText()).includes(name));}
+  for(const [key,name] of [['Digit4','SMG'],['Digit5','SHOTGUN'],['Digit6','MACHINE GUN'],['Digit7','CARBINE'],['Digit8','HEAVY ASSAULT'],['Digit9','MARKSMAN']]){await host.keyboard.press(key);assert.ok((await host.locator('#weaponName').innerText()).includes(name));}
+  await host.keyboard.press('KeyH');assert.match(await host.locator('#equipmentHUD').innerText(),/INJECTION 3/,'full health does not consume an injection');
+  await host.keyboard.press('KeyG');assert.match(await host.locator('#equipmentHUD').innerText(),/FRAG 2/);
+  await host.waitForTimeout(1000);await host.keyboard.press('KeyB');assert.match(await host.locator('#equipmentHUD').innerText(),/SMOKE 1/);
+  await host.waitForTimeout(2000);
+  await host.click('#soundToggle');assert.equal(await host.locator('#soundToggle').innerText(),'SOUND OFF');await host.click('#soundToggle');
+  if(process.argv.includes('--medical')){
+    await host.click('#missionPanel .retry');await host.locator('#game canvas').click({position:{x:720,y:550}});
+    await host.waitForFunction(()=>Number(document.querySelector('#stats').textContent.match(/HP: (\d+)/)[1])<1000,{},{timeout:30000});
+    const before=Number((await host.locator('#stats').innerText()).match(/HP: (\d+)/)[1]);await host.keyboard.press('KeyH');
+    const after=Number((await host.locator('#stats').innerText()).match(/HP: (\d+)/)[1]);assert.ok(after>before&&after<=1000);assert.match(await host.locator('#equipmentHUD').innerText(),/INJECTION 2/);
+    await host.keyboard.press('Escape');await host.evaluate(()=>document.exitPointerLock());await host.waitForFunction(()=>!document.pointerLockElement);await host.screenshot({path:'artifacts/field-medical.png'});console.log('PASS: real guard damage followed by H injection heals living player without exceeding 1000 HP.');
+  }
   if (process.argv.includes('--death')) {
     await host.evaluate(() => {
       window.healthChanges=[1000];
@@ -67,6 +79,7 @@ try {
     assert.equal(await host.locator('#missionFailure').isVisible(),false);
     console.log('PASS: exactly 15 guard hits to death, hidden camera hint, failure dialog, restart to 1000 HP, back to menu.');
   } else await host.click('#missionPanel .exit');
+  for(const index of [1,2,3]){await host.selectOption('#missionSelect',String(index));await host.click('#campaign');assert.match(await host.locator('#stats').innerText(),/HP: 1000/);assert.match(await host.locator('#missionPanel .objective').innerText(),new RegExp(`1/${index===3?7:6}`));await host.screenshot({path:`artifacts/operation-${index+1}.png`});await host.click('#missionPanel .exit');}
   await host.click('#training');
   assert.match(await host.locator('#networkStatus').innerText(), /OFFLINE TRAINING/);
   await host.keyboard.press('KeyM');

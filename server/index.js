@@ -1,3 +1,4 @@
+import {EQUIPMENT,createEquipment,throwLanding,blastDamage,healHealth} from '../shared/equipment.js';
 import { WEAPONS, createAmmo, shotDirections } from '../shared/weapons.js';
 import { createServer } from 'node:http';
 import { Server } from 'socket.io';
@@ -146,6 +147,7 @@ function sendWeaponState(socket, player) {
     ammo: { ...player.ammo },
     reloading: player.reloading,
     weapons: WEAPONS,
+    equipment: {...player.equipment},
   });
 }
 
@@ -327,6 +329,7 @@ function addPlayer(socket, room, code) {
 
     weapon: DEFAULT_WEAPON,
     ammo: createAmmo(),
+    equipment:createEquipment(),lastEquipment:0,
 
     reloading: false,
     reloadTimer: null,
@@ -354,7 +357,84 @@ function roomResponse(socket, room, code, spawn) {
     targets: allTargets(room),
     weapons: WEAPONS,
     round: roundState(room),
+    equipment:{...room.players.get(socket.id).equipment},
+    smokes:(room.smokes||[]).filter(c=>c.expires>Date.now()),
   };
+}
+
+function damagePlayer(code,room,shooterId,targetId,damage,weaponId){
+ const shooter=room.players.get(shooterId),target=room.players.get(targetId);
+ if(!shooter || !target?.alive || room.winner)return;
+    target.hp = Math.max(0, target.hp - damage);
+
+    io.to(code).emit('player-hit', {
+      targetId,
+      shooterId: shooterId,
+      weapon: weaponId,
+      hp: target.hp,
+      damage: damage,
+    });
+
+    if (target.hp === 0) {
+      target.alive = false;
+      target.deaths++;
+
+      shooter.kills++;
+      if(shooter.kills >= SCORE_LIMIT) room.winner=shooterId;
+
+      cancelReload(target);
+
+      io.to(code).emit('player-killed', {
+        killerId: shooterId,
+        victimId: targetId,
+        weapon: weaponId,
+      });
+
+      target.respawnTimer = setTimeout(() => {
+        if (room.players.get(targetId) !== target) {
+          return;
+        }
+
+        target.position = spawnFor(target.slot);
+
+        target.hp = MAX_HP;
+        target.alive = true;
+
+        target.ammo = createAmmo();
+        target.equipment=createEquipment();target.lastEquipment=0;
+        target.weapon = DEFAULT_WEAPON;
+
+        target.lastShot = 0;
+        target.lastMove = Date.now();
+        target.respawnTimer = null;
+
+        cancelReload(target);
+
+        io.to(code).emit('player-respawned', {
+          id: targetId,
+          position: target.position,
+          hp: MAX_HP,
+          weapon: target.weapon,
+        });
+
+        io.to(code).emit('weapon-changed', {
+          id: targetId,
+          weapon: DEFAULT_WEAPON,
+        });
+
+        io.to(targetId).emit('ammo-update', WEAPONS[DEFAULT_WEAPON].magazine);
+
+        const targetSocket = io.sockets.sockets.get(targetId);
+
+        if (targetSocket) {
+          sendWeaponState(targetSocket, target);
+        }
+
+        sendState(code, room);
+      }, RESPAWN_MS);
+    }
+
+    sendState(code,room);
 }
 
 // ================================================
@@ -381,6 +461,7 @@ io.on('connection', (socket) => {
       players: new Map(),
       targets: createTargets(),
       winner: null,
+      generation:0,smokes:[],
       ready: new Set(),
     };
 
@@ -560,17 +641,47 @@ io.on('connection', (socket) => {
     if(!room?.winner || !room.players.has(socket.id))return;
     room.ready.add(socket.id);
     if(room.players.size===2 && [...room.players.keys()].every(id=>room.ready.has(id))) {
-      room.winner=null;room.ready.clear();room.targets=createTargets();
+      room.generation++;room.smokes=[];room.winner=null;room.ready.clear();room.targets=createTargets();
       for(const [id,p] of room.players) {
         clearTimeout(p.respawnTimer);p.respawnTimer=null;cancelReload(p);
         Object.assign(p,{position:spawnFor(p.slot),hp:MAX_HP,alive:true,kills:0,deaths:0,
-          ammo:createAmmo(),weapon:DEFAULT_WEAPON,lastShot:0,lastMove:Date.now()});
+          equipment:createEquipment(),lastEquipment:0,ammo:createAmmo(),weapon:DEFAULT_WEAPON,lastShot:0,lastMove:Date.now()});
         io.to(code).emit('player-respawned',{id,position:p.position,hp:MAX_HP,weapon:DEFAULT_WEAPON});
         const targetSocket=io.sockets.sockets.get(id);if(targetSocket)sendAmmo(targetSocket,p);
       }
       io.to(code).emit('targets-reset',allTargets(room));
     }
     sendState(code,room);
+  });
+
+  socket.on('use-equipment',(data,ack=()=>{})=>{
+    if(typeof ack!=='function')return;
+    const code=socket.data.roomCode,room=rooms.get(code),player=room?.players.get(socket.id),type=data?.type;
+    if(!player?.alive || room.winner || !Object.hasOwn(EQUIPMENT,type) || player.equipment[type]<=0 || Date.now()-player.lastEquipment<900)return ack({ok:false});
+    if(type==='injection'){
+      if(player.hp>=MAX_HP)return ack({ok:false});
+      player.equipment[type]--;player.lastEquipment=Date.now();player.hp=healHealth(player.hp,MAX_HP,true);
+      sendWeaponState(socket,player);io.to(code).emit('equipment-healed',{id:socket.id,hp:player.hp});sendState(code,room);return ack({ok:true});
+    }
+    if(!validVector(data.direction) || Math.abs(Math.hypot(data.direction.x,data.direction.y,data.direction.z)-1)>.01)return ack({ok:false});
+    const landing=throwLanding(player.position,data.direction,obstacles,45),definition=EQUIPMENT[type],generation=room.generation;
+    player.equipment[type]--;player.lastEquipment=Date.now();sendWeaponState(socket,player);
+    io.to(code).emit('equipment-thrown',{type,origin:{...player.position},landing,fuse:definition.fuse});ack({ok:true});
+    setTimeout(()=>{
+      if(rooms.get(code)!==room || room.generation!==generation || room.winner || !room.players.has(socket.id))return;
+      if(type==='smoke'){
+        const cloud={...landing,expires:Date.now()+definition.duration*1000};room.smokes=(room.smokes||[]).filter(c=>c.expires>Date.now());room.smokes.push(cloud);
+        io.to(code).emit('equipment-resolved',{type,position:landing,duration:definition.duration,expires:cloud.expires});
+      }else{
+        io.to(code).emit('equipment-resolved',{type,position:landing});
+        const blastOrigin={...landing,y:.9};
+        for(const [id,opponent] of room.players){if(id===socket.id||!opponent.alive)continue;
+          const distance=Math.hypot(opponent.position.x-landing.x,opponent.position.z-landing.z),damage=blastDamage(distance);
+          const dy=1-blastOrigin.y,dx=opponent.position.x-landing.x,dz=opponent.position.z-landing.z,length=Math.hypot(dx,dy,dz),direction={x:dx/length,y:dy/length,z:dz/length};
+          if(damage && !obstacles.some(box=>rayBoxDistance(blastOrigin,direction,box)<length))damagePlayer(code,room,socket.id,id,damage,'frag');
+        }
+      }
+    },definition.fuse*1000);
   });
 
   socket.on('shoot', (data) => {
@@ -620,7 +731,7 @@ io.on('connection', (socket) => {
       z: shooter.position.z,
     };
 
-    for (const dir of shotDirections(data.direction, weapon)) {
+    for (const [pellet,dir] of shotDirections(data.direction, weapon).entries()) {
     let wallDistance = weapon.range;
 
     for (const box of obstacles) {
@@ -667,6 +778,7 @@ io.on('connection', (socket) => {
     }
 
     io.to(code).emit('shot-fired', {
+      pellet,
       shooterId: socket.id,
       weapon: shooter.weapon,
       origin,
@@ -714,74 +826,7 @@ io.on('connection', (socket) => {
     const targetId = closest.id;
     const target = closest.entity;
 
-    target.hp = Math.max(0, target.hp - weapon.damage);
-
-    io.to(code).emit('player-hit', {
-      targetId,
-      shooterId: socket.id,
-      weapon: shooter.weapon,
-      hp: target.hp,
-      damage: weapon.damage,
-    });
-
-    if (target.hp === 0) {
-      target.alive = false;
-      target.deaths++;
-
-      shooter.kills++;
-      if(shooter.kills >= SCORE_LIMIT) room.winner=socket.id;
-
-      cancelReload(target);
-
-      io.to(code).emit('player-killed', {
-        killerId: socket.id,
-        victimId: targetId,
-        weapon: shooter.weapon,
-      });
-
-      target.respawnTimer = setTimeout(() => {
-        if (room.players.get(targetId) !== target) {
-          return;
-        }
-
-        target.position = spawnFor(target.slot);
-
-        target.hp = MAX_HP;
-        target.alive = true;
-
-        target.ammo = createAmmo();
-        target.weapon = DEFAULT_WEAPON;
-
-        target.lastShot = 0;
-        target.lastMove = Date.now();
-        target.respawnTimer = null;
-
-        cancelReload(target);
-
-        io.to(code).emit('player-respawned', {
-          id: targetId,
-          position: target.position,
-          hp: MAX_HP,
-          weapon: target.weapon,
-        });
-
-        io.to(code).emit('weapon-changed', {
-          id: targetId,
-          weapon: DEFAULT_WEAPON,
-        });
-
-        io.to(targetId).emit('ammo-update', WEAPONS[DEFAULT_WEAPON].magazine);
-
-        const targetSocket = io.sockets.sockets.get(targetId);
-
-        if (targetSocket) {
-          sendWeaponState(targetSocket, target);
-        }
-
-        sendState(code, room);
-      }, RESPAWN_MS);
-    }
-
+    damagePlayer(code,room,socket.id,targetId,weapon.damage,shooter.weapon);
     sendState(code, room);
     }
   });

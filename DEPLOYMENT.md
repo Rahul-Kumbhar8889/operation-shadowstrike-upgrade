@@ -62,3 +62,19 @@ For the extended health/death/restart/menu browser check, run `node scripts/brow
 Six selectable weapons (keys 1–6): AR-4, SR-8, P-12, suppressed Spectre SMG, Breacher eight-pellet shotgun, Sentinel LMG. Hold left mouse for automatic weapons. Weapons share one catalogue on server/client; the server resolves shotgun pellets and consumes one shell.
 
 Each original operation now spans a 210m movement area, five enterable installations, five ordered terminal objectives and extraction, with 12–14 guards. Follow the numbered objective; clear guards within 12m before interacting. It is not necessary to kill every guard on the map. The operator is an original 1.9m articulated model with tapered torso, bent elbows/knees, camouflage, curved armor, face detail and merged mesh batches. It is procedural, not a photorealistic scanned character.
+
+## Field equipment and four-operation update
+
+Tactical branch only; the original `main` and its Render services remain untouched.
+
+- Nine firearm slots (`1`–`9`): AR-4, SR-8, P-12, Spectre SMG, Breacher shotgun, Sentinel LMG, Vanguard carbine, Raven heavy assault and Falcon DMR. Firearms, magazines, pellets and damage share one server/browser catalogue.
+- `G`: three frag grenades per life/operation; 1.8s fuse, 9m falloff, walls block blast. Frag damages enemy guards/opponents; friendly/self damage is disabled.
+- `B`: two smoke grenades; 1s fuse and 16s concealment. Story guards lose sight; PvP receives replicated smoke and concealment. Bullets and grenades still penetrate smoke.
+- `H`: three field injections; story heals up to 350 HP, PvP up to 35, capped at each mode's health maximum. No revival and no consumption at full health. Server validates PvP inventory, cooldowns, throw origin and health.
+- Four solo story operations, selectable from the lobby: the first three have six installations, Iron Horizon has seven. World movement bounds are ±155m. Each operation has 16–20 guards and a route over 400m; guards investigate nearby gunfire. Objectives use interruptible 3–10s terminal actions followed by extraction. These are original abstract terminal tasks, not a vehicle/escort or fully simulated sabotage system.
+- Camera-mounted first-person weapons; `V` returns to the improved articulated procedural operator. Original camouflage, cloth folds, gear and elbow/knee motion; not photorealistic asset scans.
+- Textured compounds, perimeter hills/trees, radar landmark, fuel stores, towers and a runway in operation four. Interior collision remains aligned with rendered walls.
+- Procedural Web Audio gun/noise profiles, reload, footsteps, pin, explosion, smoke, objective and healing cues. Browser interaction unlocks audio. The Sound button mutes effects.
+- Room mode remains authoritative 1v1, first to five kills; missions are solo, not network co-op. Campaign retains 1000 HP and the existing failure/restart flow. No IGI or Counter-Strike assets were copied.
+
+Verification: `npm test`, `npm run build`, `node scripts/browser-smoke.mjs`, `node scripts/campaign-integration.mjs`. Set `BROWSER_EXECUTABLE` if Playwright's default browser is unavailable. Integration tests exercise all four objective chains with simulated movement/combat, not a complete manual playthrough. Smoke tests cover all lobby mission selections, weapon keys, inventory, mute, and two browser contexts joining/leaving a room.

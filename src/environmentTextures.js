@@ -97,3 +97,13 @@ export function createEnvironmentTextures() {
   });
   return { concrete, metal, ground };
 }
+
+// Tileable dirt for the much larger story maps; no baked street layout.
+export function createTerrainTexture(){
+ const texture=canvasTexture(1024,(ctx,size)=>{
+  const rnd=random(912);ctx.fillStyle='#807b61';ctx.fillRect(0,0,size,size);
+  for(let i=0;i<220;i++){const x=rnd()*size,y=rnd()*size,r=20+rnd()*100,g=ctx.createRadialGradient(x,y,0,x,y,r);g.addColorStop(0,i%2?'#44563450':'#b2a18245');g.addColorStop(1,'#807b6100');ctx.fillStyle=g;ctx.fillRect(x-r,y-r,r*2,r*2);}
+  for(let i=0;i<24000;i++){const x=rnd()*size,y=rnd()*size;ctx.fillStyle=['#242e2238','#d4c9a643','#60634a50'][i%3];ctx.fillRect(x,y,1+rnd()*2,1+rnd()*2);}
+  for(let i=0;i<900;i++){ctx.fillStyle=i%2?'#b1aa884f':'#303b2d40';ctx.beginPath();ctx.ellipse(rnd()*size,rnd()*size,1+rnd()*3,1+rnd()*2,rnd()*Math.PI,0,Math.PI*2);ctx.fill();}
+ });texture.repeat.set(10,10);return texture;
+}
