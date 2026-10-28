@@ -1,3 +1,4 @@
+import {createTouchControls} from './touchControls.js';
 import {EQUIPMENT,createEquipment,throwLanding,healHealth,smokeBlocks} from '../shared/equipment.js';
 import {createEquipmentEffects} from './equipmentEffects.js';
 import { WEAPONS, createAmmo, shotDirections } from '../shared/weapons.js';
@@ -34,6 +35,7 @@ let fireHeld = false;
 let reloadToken = 0;
 
 let currentRoom = null;
+let lastRoomCode=null;
 let multiplayerActive = false;
 let connectionBusy = false;
 let lastNetworkUpdate = 0;
@@ -86,7 +88,8 @@ app.innerHTML = `
       <button id="joinRoom">JOIN ROOM</button>
       <select id="missionSelect" aria-label="Select story operation"><option value="0">01 / Railway Interdiction</option><option value="1">02 / Signal Blackout</option><option value="2">03 / Nightfall Extraction</option><option value="3">04 / Iron Horizon Airfield</option></select>
       <button id="campaign">STORY OPERATIONS — 4 MISSIONS</button>
-      <p class="mode-rules">Story: clear guards, secure intel, extract alive.<br>Multiplayer: 1v1 combat, first to 5 kills wins; both players agree to rematch.<br>Desktop keyboard + mouse required.</p>
+      <p class="mode-rules">Story: clear guards, secure intel, extract alive.<br>Multiplayer: 1v1 combat, first to 5 kills wins; both players agree to rematch.<br>Desktop keyboard/mouse or phone touch controls.</p>
+      <button id="howToPlay" class="secondary">HOW TO PLAY</button>
       <button id="training" class="secondary">SOLO TRAINING</button>
 
       <p id="roomStatus" role="status" aria-live="polite">Ready to connect</p>
@@ -883,7 +886,7 @@ function resetPlayerWeapons(preserveWorldEffects=false) {
 
 function enterRoom(response) {
   campaign.stop();firstPerson=false;soldier.rotation.set(0,0,0);
-  currentRoom = response.code;
+  currentRoom = response.code;lastRoomCode=response.code;
   updateRound(response.round);
   multiplayerActive = true;
 
@@ -1280,7 +1283,8 @@ socket.on('disconnect', (reason) => {
 
   leaveGame();
 
-  $('#roomStatus').textContent = `Connection lost (${reason}). Rooms are not restored automatically; create or join a room again.`;
+  $('#roomCode').value=lastRoomCode||'';
+  $('#roomStatus').textContent = 'Connection lost. Your previous room code is filled in. Press JOIN ROOM to retry; if the room expired, create a new one.';
 });
 
 // ==============================================
@@ -1491,12 +1495,22 @@ let pitch = 0;
 
 const mouseSensitivity = 0.0025;
 
+const touchControls=createTouchControls({canvas:renderer.domElement,keys,
+ look(dx,dy){yaw-=dx*.004;pitch=THREE.MathUtils.clamp(pitch-dy*.004,-1.1,1.1);},
+ fire(){fireHeld=true;shoot();},stopFire(){fireHeld=false;},reload,nextWeapon,
+ interact:()=>campaign.active&&campaign.interact(),equipment:useEquipment,
+ camera:()=>{firstPerson=!firstPerson;},menu:leaveGame,
+ active:()=>gameActive()&&alive&&(!campaign.active||campaign.running)&&!document.querySelector('#instructions')?.open});
+const instructions=document.createElement('dialog');instructions.id='instructions';
+instructions.innerHTML=`<h2>FIELD MANUAL</h2><p><strong>Multiplayer:</strong> create a room and share its six-character code. Your friend opens this same link and joins. First to five kills wins. Respawn takes three seconds; both players must agree to rematch.</p><p><strong>Story:</strong> choose one of four solo operations. Follow numbered objectives, clear guards within 12m, approach within 2.4m and use E. Stay near the terminal until its action finishes, then reach extraction.</p><p><strong>Desktop:</strong> WASD move, Shift sprint, mouse look, click fire, R reload, 1–9 weapons, G frag, B smoke, H heal, V view, M menu, Esc release mouse. Z scopes the sniper.</p><p><strong>Phone:</strong> landscape works best. Left joystick moves; drag the scene to look. Hold FIRE for automatic weapons. Buttons reload, switch guns, use equipment and interact.</p><p>Three healing injections per life: +350 story HP or +35 multiplayer HP, capped at maximum. Smoke conceals but does not stop bullets. Frag grenades hurt enemies; self damage is disabled.</p><button autofocus>CLOSE MANUAL</button>`;
+document.body.append(instructions);instructions.querySelector('button').onclick=()=>instructions.close();$('#howToPlay').onclick=()=>instructions.showModal();
+
 function gameActive() {
   return $('#lobby').classList.contains('hidden');
 }
 
 function mouseLocked() {
-  return document.pointerLockElement === renderer.domElement;
+  return touchControls.enabled || document.pointerLockElement === renderer.domElement;
 }
 
 function updateMouseHint() {
@@ -1505,6 +1519,7 @@ function updateMouseHint() {
 }
 
 renderer.domElement.addEventListener('pointerdown', (event) => {
+  if(touchControls.enabled)return;
   if (!gameActive() || !alive || (campaign.active && !campaign.running)) return;
 
   if (!mouseLocked()) {
@@ -1587,6 +1602,7 @@ const clock = new THREE.Clock();
 function animate() {
   const dt = Math.min(clock.getDelta(), 0.05);
 
+  touchControls.update();
   let moving = false;
   if(fireHeld && mouseLocked() && gameActive() && alive && WEAPONS[currentWeapon].automatic)shoot();
 

@@ -78,3 +78,9 @@ Tactical branch only; the original `main` and its Render services remain untouch
 - Room mode remains authoritative 1v1, first to five kills; missions are solo, not network co-op. Campaign retains 1000 HP and the existing failure/restart flow. No IGI or Counter-Strike assets were copied.
 
 Verification: `npm test`, `npm run build`, `node scripts/browser-smoke.mjs`, `node scripts/campaign-integration.mjs`. Set `BROWSER_EXECUTABLE` if Playwright's default browser is unavailable. Integration tests exercise all four objective chains with simulated movement/combat, not a complete manual playthrough. Smoke tests cover all lobby mission selections, weapon keys, inventory, mute, and two browser contexts joining/leaving a room.
+
+## Submission usability polish
+
+Touch devices now receive a movement joystick, drag-to-look and fire/reload/weapon/use/frag/smoke/heal/view/menu buttons. Landscape is recommended. Touch controls release movement and firing on blur or page hiding. A field manual explains both modes, scoring, equipment and keyboard/touch controls. On disconnection the previous room code is retained for an explicit Join retry; expired rooms are not restored automatically.
+
+`node scripts/mobile-smoke.mjs` verifies landscape touch firing, weapon switching, manual and menu. This is browser emulation; physical Android/iOS performance and multi-touch feel still require device playtesting.
