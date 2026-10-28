@@ -31,6 +31,16 @@ export function createCampaign({
   panel.innerHTML =
     '<small>SHADOWSTRIKE / FIELD OPERATIONS</small><h2></h2><p class="brief"></p><p class="objective"></p><canvas class="radar" width="280" height="150" aria-label="Tactical map: blue player, red guards, green terminal, cyan extraction"></canvas><p>E interact • V camera • Esc release cursor</p><button class="next" hidden>NEXT OPERATION</button><button class="retry">RESTART MISSION</button><button class="exit">RETURN TO MENU</button>';
   document.body.append(panel);
+  const failure = document.createElement("section");
+  failure.id = "missionFailure";
+  failure.hidden = true;
+  failure.setAttribute("role", "dialog");
+  failure.setAttribute("aria-modal", "true");
+  failure.setAttribute("aria-labelledby", "missionFailureTitle");
+  failure.innerHTML = '<div class="failure-card"><h1 id="missionFailureTitle">MISSION FAILED</h1><p>Your health reached zero. Regroup and try again.</p><button class="restart">RESTART MISSION</button><button class="menu">BACK TO MAIN MENU</button></div>';
+  document.body.append(failure);
+  failure.querySelector(".restart").onclick = () => start(state.index);
+  failure.querySelector(".menu").onclick = () => exit();
   const q = (s) => panel.querySelector(s);
   q(".retry").onclick = () => start(state.index);
   q(".next").onclick = () => start((state.index + 1) % 3);
@@ -65,6 +75,7 @@ export function createCampaign({
   }
   function start(index = 0) {
     cleanup();
+    failure.hidden = true;
     state = { index, status: "active", intel: false };
     time = 0;
     group.visible = true;
@@ -315,12 +326,16 @@ export function createCampaign({
     fail() {
       state.status = "failed";
       paint();
+      panel.hidden = true;
+      failure.hidden = false;
+      failure.querySelector(".restart").focus({preventScroll:true});
       document.exitPointerLock?.();
     },
     stop() {
       cleanup();
       state.status = "inactive";
       panel.hidden = true;
+      failure.hidden = true;
       group.visible = false;
     },
     setExit(fn) {

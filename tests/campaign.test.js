@@ -60,3 +60,16 @@ for (let index = 0; index < MISSIONS.length; index++) {
     assert.ok(reached, "player can navigate partition to terminal");
   });
 }
+
+// Survival tuning applies to every story operation, not PvP.
+test('story health survives fourteen guard bullets and reaches zero on bullet fifteen', async () => {
+  const {CAMPAIGN_MAX_HP, GUARD_BULLET_DAMAGE} = await import('../shared/campaign.js');
+  assert.equal(CAMPAIGN_MAX_HP,1000);
+  for(const mission of MISSIONS) {
+    assert.equal(mission.damage,GUARD_BULLET_DAMAGE);
+    let hp=CAMPAIGN_MAX_HP;
+    for(let hit=1;hit<=14;hit++) {hp=Math.max(0,hp-mission.damage);assert.ok(hp>0);}
+    assert.equal(hp,20);
+    assert.equal(Math.max(0,hp-mission.damage),0);
+  }
+});

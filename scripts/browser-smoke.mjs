@@ -32,10 +32,37 @@ try {
   await host.waitForSelector('#missionPanel:not([hidden])');
   assert.match(await host.locator('#missionPanel h2').innerText(), /SILENT ENTRY/);
   await host.click('#missionPanel .retry');
-  assert.match(await host.locator('#stats').innerText(), /HP: 100/);
+  assert.match(await host.locator('#stats').innerText(), /HP: 1000\b/);
   await mkdir('artifacts', {recursive:true});
   await host.screenshot({path:'artifacts/mission-start.png'});
-  await host.click('#missionPanel .exit');
+  if (process.argv.includes('--death')) {
+    await host.evaluate(() => {
+      window.healthChanges=[1000];
+      new MutationObserver(records => {
+        // Multiple guards can hit in one frame; retain each intermediate text node.
+        for(const record of records)for(const node of record.addedNodes){
+          const value=Number(node.textContent.match(/HP: (\d+)/)?.[1]);
+          if(Number.isFinite(value) && value!==window.healthChanges.at(-1))window.healthChanges.push(value);
+        }
+      }).observe(document.querySelector('#stats'),{childList:true,characterData:true,subtree:true});
+    });
+    await host.locator('#game canvas').click({position:{x:720,y:500}});
+    await host.waitForSelector('#missionFailure:not([hidden])',{timeout:90000});
+    assert.deepEqual(await host.evaluate(()=>window.healthChanges),[1000,930,860,790,720,650,580,510,440,370,300,230,160,90,20,0]);
+    assert.equal(await host.locator('#mouseHint').isVisible(),false);
+    assert.equal(await host.evaluate(()=>document.pointerLockElement===null),true);
+    await host.waitForTimeout(600);
+    await host.screenshot({path:'artifacts/mission-death.png'});
+    await host.click('#missionFailure .restart');
+    assert.match(await host.locator('#stats').innerText(),/HP: 1000\b/);
+    assert.equal(await host.locator('#missionFailure').isVisible(),false);
+    await host.locator('#game canvas').click({position:{x:720,y:500}});
+    await host.waitForSelector('#missionFailure:not([hidden])',{timeout:90000});
+    await host.click('#missionFailure .menu');
+    await host.waitForSelector('#lobby:not(.hidden)');
+    assert.equal(await host.locator('#missionFailure').isVisible(),false);
+    console.log('PASS: exactly 15 guard hits to death, hidden camera hint, failure dialog, restart to 1000 HP, back to menu.');
+  } else await host.click('#missionPanel .exit');
   await host.click('#training');
   assert.match(await host.locator('#networkStatus').innerText(), /OFFLINE TRAINING/);
   await host.keyboard.press('KeyM');

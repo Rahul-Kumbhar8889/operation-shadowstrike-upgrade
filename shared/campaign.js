@@ -1,3 +1,6 @@
+export const CAMPAIGN_MAX_HP = 1000;
+export const GUARD_BULLET_DAMAGE = 70; // 14 hits leave 20 HP; hit 15 is fatal.
+
 // Original campaign definitions. Coordinates use the existing compound world.
 export const MISSIONS = [
   {
@@ -13,7 +16,7 @@ export const MISSIONS = [
       [-23, -15],
       [-31, -12],
     ],
-    damage: 8,
+    damage: GUARD_BULLET_DAMAGE,
   },
   {
     name: "02 / BLACK FREQUENCY",
@@ -29,7 +32,7 @@ export const MISSIONS = [
       [31, -12],
       [27, -9],
     ],
-    damage: 10,
+    damage: GUARD_BULLET_DAMAGE,
   },
   {
     name: "03 / LAST LIGHT",
@@ -46,7 +49,7 @@ export const MISSIONS = [
       [-6, 23],
       [6, 23],
     ],
-    damage: 12,
+    damage: GUARD_BULLET_DAMAGE,
   },
 ];
 export function missionWalls([x, z]) {

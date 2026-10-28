@@ -10,3 +10,11 @@
 #missionPanel {position:fixed;right:18px;top:18px;width:min(330px,35vw);padding:18px;background:rgba(9,20,25,.95);color:#e3eee7;border:1px solid #6c8c72;border-radius:12px;z-index:25;font:13px/1.5 Arial,sans-serif;box-shadow:0 12px 45px #0006;}
 #missionPanel[hidden]{display:none} #missionPanel h2{font-size:18px;color:#acd6ab;margin:8px 0} #missionPanel small{letter-spacing:2px;color:#98ac9e} #missionPanel .objective{font-weight:bold;color:#63eac1} #missionPanel button{padding:8px;margin:4px 3px 0 0;border:1px solid #4c7265;background:#263e37;color:#f0f6f3;cursor:pointer;border-radius:5px} #missionPanel button[hidden]{display:none}
 .mode-rules{font:12px/1.5 Arial,sans-serif;color:#9eb4c2} .lobby-card{max-height:92vh;overflow-y:auto} #campaign{background:#345b45;margin-top:12px}
+
+#missionFailure {position:fixed;inset:0;z-index:60;display:flex;align-items:flex-end;justify-content:center;padding:0 16px 35px;background:linear-gradient(transparent 40%,rgba(3,9,14,.88));box-sizing:border-box;}
+#missionFailure[hidden]{display:none}
+.failure-card {text-align:center;padding:20px 32px;background:rgba(8,18,25,.94);border:1px solid #9a6155;border-radius:12px;color:#e9eff0;font-family:Arial,sans-serif;box-shadow:0 10px 40px #0008;}
+.failure-card h1 {margin:0 0 8px;color:#ffb3a1;letter-spacing:3px;font-size:26px;}
+.failure-card p {margin:0 0 16px;color:#c4d0d3;}
+.failure-card button {padding:12px 18px;margin:4px;border:1px solid #52798b;border-radius:6px;background:#173c50;color:white;font-weight:bold;cursor:pointer;}
+.failure-card button:focus-visible {outline:3px solid #6ce0ff;outline-offset:3px;}

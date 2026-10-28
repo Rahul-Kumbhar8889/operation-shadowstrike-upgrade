@@ -30,6 +30,7 @@ Open `http://localhost:3001`. For development, start `npm run server` and `npm r
 
 ## Play
 
+- **Story health:** 1000 HP. Each guard bullet deals 70 damage: fourteen hits leave 20 HP, and the fifteenth kills. On death the camera shows the fallen soldier and a Restart Mission / Back to Main Menu dialog. Restart restores 1000 HP and the current operation. PvP health remains 100.
 - **Story Operations:** three sequential missions: Silent Entry, Black Frequency, Last Light. Enter the building through the open south doorway, eliminate all guards, use **E** at the green terminal, then **E** at the cyan extraction ring. The partition has a passage on its east side. The tactical map marks guards, the terminal and extraction.
 - **Create / Join Room:** two-player PvP using a six-character code. Server controls weapon cooldowns, ammunition, damage, kills and three-second respawns. First to five kills wins. Damage stops at the result; both players click READY FOR REMATCH to reset the round. This is not a bomb-defusal mode.
 - **Solo Training:** existing five-target practice arena.
@@ -53,3 +54,5 @@ node scripts/browser-smoke.mjs
 ```
 
 The smoke check launches the production server, verifies story start/retry/menu and training, then joins a room from two isolated browser contexts. It saves a screenshot under `artifacts/`. This checks browser sessions on one machine, not two physical devices.
+
+For the extended health/death/restart/menu browser check, run `node scripts/browser-smoke.mjs --death`. This waits for real guard fire in the first mission.

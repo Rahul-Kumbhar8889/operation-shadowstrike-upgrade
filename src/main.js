@@ -6,6 +6,7 @@ import { getWeaponImage } from './weaponImages.js';
 import { createCombatEffects, playReload, playHitConfirmation, playElimination } from './combatEffects.js';
 import './style.css';
 import { createCampaign } from './campaign.js';
+import { CAMPAIGN_MAX_HP } from '../shared/campaign.js';
 
 // OPERATION SHADOWSTRIKE
 // STEP 19B - ADVANCED WEAPONS + WEAPON IMAGE HUD
@@ -385,8 +386,16 @@ scene.add(soldier);
 const remotePlayers = new Map();
 let firstPerson = false;
 const campaign = createCampaign({scene, obstacles, player:soldier, message:showMessage, tracer:bulletTracer,
-  onDamage(damage) { hp=Math.max(0,hp-damage); flashDamage();updateHUD();if(hp===0){alive=false;campaign.fail();}},
-  onReset(position) { alive=true;hp=100;resetPlayerWeapons();resetTargets([]);soldier.position.set(position.x,0,position.z);soldier.visible=true;firstPerson=true;yaw=0;pitch=0;updateHUD(); }
+  onDamage(damage) {
+    if (!alive) return;
+    hp=Math.max(0,hp-damage);flashDamage();updateHUD();
+    if(hp===0){
+      alive=false;firstPerson=false;scoped=false;reloadToken++;reloading=false;
+      for(const key in keys)keys[key]=false;
+      campaign.fail();updateScope();updateMouseHint();
+    }
+  },
+  onReset(position) { alive=true;hp=CAMPAIGN_MAX_HP;soldier.rotation.set(0,0,0);for(const key in keys)keys[key]=false;resetPlayerWeapons();resetTargets([]);soldier.position.set(position.x,0,position.z);soldier.visible=true;firstPerson=true;yaw=0;pitch=0;updateHUD();updateMouseHint(); }
 });
 campaign.setExit(leaveGame);
 
@@ -876,7 +885,7 @@ function resetPlayerWeapons() {
 }
 
 function enterRoom(response) {
-  campaign.stop();firstPerson=false;
+  campaign.stop();firstPerson=false;soldier.rotation.set(0,0,0);
   currentRoom = response.code;
   updateRound(response.round);
   multiplayerActive = true;
@@ -973,7 +982,7 @@ $('#copyCode').onclick = async () => {
 };
 
 function leaveGame() {
-  campaign.stop();firstPerson=false;soldier.position.set(0,0,0);
+  campaign.stop();firstPerson=false;soldier.rotation.set(0,0,0);soldier.position.set(0,0,0);
   currentRoom = null;
   multiplayerActive = false;
 
@@ -1463,11 +1472,11 @@ function mouseLocked() {
 
 function updateMouseHint() {
   $('#mouseHint').style.display =
-    gameActive() && !mouseLocked() ? 'block' : 'none';
+    gameActive() && alive && (!campaign.active || campaign.running) && !mouseLocked() ? 'block' : 'none';
 }
 
 renderer.domElement.addEventListener('pointerdown', (event) => {
-  if (!gameActive()) return;
+  if (!gameActive() || !alive || (campaign.active && !campaign.running)) return;
 
   if (!mouseLocked()) {
     if (event.button === 0) {
@@ -1508,7 +1517,7 @@ window.addEventListener('keydown', (event) => {
 
   if (event.code === 'KeyR') reload();
   if (event.code === 'KeyE' && campaign.active) campaign.interact();
-  if (event.code === 'KeyV') firstPerson=!firstPerson;
+  if (event.code === 'KeyV' && alive) firstPerson=!firstPerson;
   if (event.code === 'KeyM') leaveGame();
 
   if (event.code === 'Digit1') selectWeapon('assault');
@@ -1579,13 +1588,20 @@ function animate() {
     }
   }
 
-  soldier.rotation.y = yaw;
-
-  soldier.userData.updateAnimation?.(dt, moving, sprinting);
-
   campaign.update(dt,gameActive() && alive && mouseLocked());
-  soldier.visible = alive && !firstPerson;
-  const cameraOffset = firstPerson ? new THREE.Vector3(0,1.7,0) : new THREE.Vector3(0.95, 2.75, 4.8);
+  const campaignDead = campaign.active && !alive;
+  if (campaignDead) {
+    // Roll onto the ground and keep the body visible in the death camera.
+    soldier.rotation.order='YXZ';
+    soldier.rotation.y=yaw;
+    soldier.rotation.x=THREE.MathUtils.damp(soldier.rotation.x,-Math.PI/2,9,dt);
+    soldier.position.y=THREE.MathUtils.damp(soldier.position.y,.55,9,dt);
+  } else {
+    soldier.rotation.y=yaw;
+    soldier.userData.updateAnimation?.(dt, moving, sprinting);
+  }
+  soldier.visible = campaignDead || (alive && !firstPerson);
+  const cameraOffset = campaignDead ? new THREE.Vector3(1.5,2.7,3.4) : firstPerson ? new THREE.Vector3(0,1.7,0) : new THREE.Vector3(0.95, 2.75, 4.8);
 
   cameraOffset.applyAxisAngle(UP, yaw);
 
@@ -1609,7 +1625,10 @@ function animate() {
     -Math.cos(yaw) * horizontal
   );
 
-  camera.lookAt(camera.position.clone().add(lookDirection));
+  if (campaignDead) {
+    const bodyCenter = new THREE.Vector3(0,.15,-1).applyAxisAngle(UP,yaw).add(soldier.position);
+    camera.lookAt(bodyCenter);
+  } else camera.lookAt(camera.position.clone().add(lookDirection));
 
   camera.updateMatrixWorld();
 
