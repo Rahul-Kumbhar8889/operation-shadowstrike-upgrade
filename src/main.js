@@ -633,7 +633,7 @@ function updateHUD() {
     `HP: ${hp} | ` +
     `${WEAPONS[currentWeapon].short}: ` +
     `${ammo}/${WEAPONS[currentWeapon].magazine} | ` +
-    (campaign.active ? 'STORY OPERATION' : `TARGETS: ${targetKills}/5`);
+    (campaign.active ? 'STORY OPERATION' : `${multiplayerActive?'DRILL GUARDS':'TRAINING GUARDS'}: ${targetKills}/5`);
 }
 
 function selectWeapon(id, notifyServer = true) {
@@ -680,15 +680,11 @@ const targetSpawns = [
 const targets = new Map();
 
 function createTarget(data) {
-  const mesh = new THREE.Mesh(
-    new THREE.BoxGeometry(1, 2, 0.7),
-    new THREE.MeshStandardMaterial({
-      color: 0xd12e35,
-    })
-  );
-
-  mesh.position.set(data.x, 1, data.z);
-  mesh.userData.targetId = data.id;
+  // Preserve the authoritative target hit volume; render an original soldier, not a red block.
+  const mesh=new THREE.Mesh(new THREE.BoxGeometry(1,2,.7),new THREE.MeshBasicMaterial({visible:false}));
+  mesh.position.set(data.x,1,data.z);
+  const model=createSoldier(0x75664a);model.position.y=-1;mesh.add(model);
+  mesh.traverse(o=>{o.userData.targetId=data.id;});
   scene.add(mesh);
 
   const targetAlive = data.alive !== false;
@@ -705,8 +701,7 @@ function createTarget(data) {
 function resetTargets(list = targetSpawns) {
   for (const target of targets.values()) {
     scene.remove(target.mesh);
-    target.mesh.geometry.dispose();
-    target.mesh.material.dispose();
+    target.mesh.traverse(o=>{o.geometry?.dispose();if(o.material)o.material.dispose();});
   }
 
   targets.clear();
@@ -848,7 +843,7 @@ const lobbyConnection = createLobbyConnection({
 const socket = lobbyConnection.socket;
 
 function updateScoreboard(players) {
-  $('#playerCount').textContent = `PLAYERS: ${players.length}/2`;
+  $('#playerCount').textContent = `PLAYERS: ${players.length}/2${players.length<2?' — WAITING FOR OPPONENT':' — PVP LIVE'}`;
 
   $('#scoreRows').innerHTML = [...players]
     .sort((a, b) => b.kills - a.kills)
@@ -921,7 +916,7 @@ function enterRoom(response) {
   updateHUD();
   updateMouseHint();
 
-  showMessage('CONNECTED TO COMBAT ROOM');
+  showMessage('ROOM READY — Share the code. Stationary drill guards are practice targets; only opponent kills count toward victory.');
 }
 
 async function requestRoom(eventName, code) {
