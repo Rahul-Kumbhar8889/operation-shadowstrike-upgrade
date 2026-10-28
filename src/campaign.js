@@ -1,6 +1,7 @@
+import {applyDeathPose} from './deathPose.js';
 import {addGuardDetail} from './guardDetail.js';
 import { blastDamage, smokeBlocks } from '../shared/equipment.js';
-import { playGunshot, playObjective } from './combatEffects.js';
+import { playGunshotAt, playObjective } from './combatEffects.js';
 import * as THREE from "three";
 import { createSoldier } from "./soldier.js";
 import { createEnvironmentTextures,createTerrainTexture } from "./environmentTextures.js";
@@ -18,6 +19,7 @@ export function createCampaign({
   onReset,
   message,
   tracer,
+  blood=()=>{},
 }) {
   const textures=createEnvironmentTextures();textures.ground.dispose();textures.ground=createTerrainTexture();textures.ground.repeat.set(15,15);
   const baseColliders=[...obstacles];
@@ -30,7 +32,7 @@ export function createCampaign({
     colliders = [],
     time = 0,
     exit = () => {},
-    beacon, task=null, smokeClouds=[],network=false,networkWaiting=false,networkAction=()=>{};
+    beacon, task=null, smokeClouds=[],network=false,networkWaiting=false,networkAction=()=>{},transitionRemaining=null;
   const ray = new THREE.Raycaster(),
     panel = document.createElement("section");
   panel.id = "missionPanel";
@@ -86,7 +88,7 @@ export function createCampaign({
     cleanup();
     obstacles.length=0;
     for(const o of baseWorld)o.visible=false;
-    failure.hidden = true;
+    failure.hidden = true;transitionRemaining=null;
     state = { index, status: "active", intel: false, step:0 };
     time = 0;task=null;smokeClouds=[];
     group.visible = true;
@@ -201,8 +203,9 @@ export function createCampaign({
     if(task && state.status==='active')q('.objective').textContent=`${current.action} • ${Math.ceil(task.remaining)}s • Stay within 2.4m; nearby threats interrupt`;
     q('.start').hidden=!network||state.status!=='waiting'||networkWaiting;
     q('.retry').hidden=network&&state.status!=='failed'&&state.status!=='complete';
-    if(network && (networkWaiting||state.status==='waiting'))q('.objective').textContent=networkWaiting?'CO-OP: WAITING FOR SECOND PLAYER — share your room code':'SQUAD READY — press START CO-OP MISSION';
-    q(".next").hidden = state.status !== "complete";
+    if(network && (networkWaiting||state.status==='waiting'))q('.objective').textContent=networkWaiting?'CO-OP: WAITING FOR SECOND PLAYER — safe exploration available; share your room code':'SQUAD READY — press START CO-OP MISSION or Enter';
+    if(state.status==='complete')q('.objective').textContent=transitionRemaining!==null?`OPERATION COMPLETE — next operation in ${Math.ceil(transitionRemaining)}s`:'CAMPAIGN COMPLETE — all four operations secured';
+    q(".next").hidden = state.status !== "complete" || transitionRemaining!==null;
     q(".next").textContent =
       state.index === MISSIONS.length-1 ? "REPLAY CAMPAIGN" : "NEXT OPERATION";
     const ctx = q(".radar").getContext("2d");
@@ -268,7 +271,8 @@ export function createCampaign({
     ).length;
   }
   function update(dt, running) {
-    for(const e of enemies)e.detail(e.model.position.distanceTo(player.position));
+    for(const e of enemies){e.detail(e.model.position.distanceTo(player.position));if(e.hp<=0){e.deathAge=(e.deathAge||0)+dt;applyDeathPose(e.model,e.deathAge);}}
+    if(!network&&state.status==='complete'&&transitionRemaining!==null){transitionRemaining-=dt;if(transitionRemaining<=0){start(state.index+1);return;}paint();}
     if(network){for(const e of enemies)if(e.hp>0)e.model.userData.updateAnimation?.(dt,!!e.networkMoving,false);return;}
     if (state.status !== "active" || !running) return;
     time += dt;
@@ -313,7 +317,7 @@ export function createCampaign({
       if (visible && time - e.lastFire > 1.35) {
         e.lastFire = time;
         e.model.userData.playRecoil?.();
-        playGunshot('assault',.25);
+        playGunshotAt('assault',eye,player.position,player.rotation.y);
         tracer(eye, target.clone().sub(eye).normalize(), distance);
         onDamage(MISSIONS[state.index].damage);
         if (state.status !== "active") break;
@@ -341,9 +345,10 @@ export function createCampaign({
     const hit = ray.intersectObjects(aimMeshes(), false)[0];
     if (!hit) return false;
     const e = hit.object.userData.guard;
+    blood(hit.point);
     e.hp = Math.max(0, e.hp - damage);
     if (!e.hp) {
-      e.model.rotation.x=-Math.PI/2;e.model.position.y=.25;
+      e.deathAge=0;
       message("GUARD NEUTRALIZED");
     }
     paint();
@@ -363,7 +368,7 @@ export function createCampaign({
           ? "OPERATION COMPLETE"
           : state.intel ? "ALL OBJECTIVES SECURED — PROCEED TO EXTRACTION" : "OBJECTIVE COMPLETE — NEXT INSTALLATION MARKED",
       );
-      if (state.status === "complete") document.exitPointerLock?.();
+      if (state.status === "complete") {transitionRemaining=state.index<MISSIONS.length-1?5:null;if(transitionRemaining===null)document.exitPointerLock?.();}
     } else if (state.status === "active")
       message(
         "Follow the numbered objective. Clear guards within 12m, then press E within 2.4m of its terminal.",
@@ -381,21 +386,22 @@ export function createCampaign({
   function blast(position){
     if(state.status!=='active')return;
     const origin=new THREE.Vector3(position.x,.9,position.z);
-    for(const e of enemies){if(e.hp<=0)continue;const target=e.model.position.clone().add(new THREE.Vector3(0,1,0)),damage=blastDamage(origin.distanceTo(target));if(damage && lineClear(origin,target,false)){e.hp=Math.max(0,e.hp-damage);if(!e.hp){e.model.rotation.x=-Math.PI/2;e.model.position.y=.25;}}}paint();
+    for(const e of enemies){if(e.hp<=0)continue;const target=e.model.position.clone().add(new THREE.Vector3(0,1,0)),damage=blastDamage(origin.distanceTo(target));if(damage && lineClear(origin,target,false)){e.hp=Math.max(0,e.hp-damage);if(!e.hp){e.deathAge=0;blood(target);}}}paint();
   }
   return {
     start,
     setNetworkAction(fn){networkAction=fn;},
     sync(snapshot){
       if(!network)return;
-      const previous=state.step;state={index:snapshot.index,status:snapshot.status,step:snapshot.step,intel:snapshot.intel};networkWaiting=snapshot.waiting;task=snapshot.task;
-      for(const data of snapshot.guards){const e=enemies[data.id];if(!e)continue;e.networkMoving=Math.hypot(e.model.position.x-data.x,e.model.position.z-data.z)>.01;e.hp=data.hp;e.model.position.set(data.x,e.hp>0?0:.25,data.z);e.model.rotation.set(e.hp>0?0:-Math.PI/2,data.rotation,0);}
+      const previous=state.step;state={index:snapshot.index,status:snapshot.status,step:snapshot.step,intel:snapshot.intel};networkWaiting=snapshot.waiting;task=snapshot.task;transitionRemaining=snapshot.transitionRemaining??null;
+      for(const data of snapshot.guards){const e=enemies[data.id];if(!e)continue;e.networkMoving=Math.hypot(e.model.position.x-data.x,e.model.position.z-data.z)>.01;const killed=e.hp>0&&data.hp<=0;e.hp=data.hp;if(killed){e.deathAge=0;blood(new THREE.Vector3(data.x,1.1,data.z));}e.model.position.x=data.x;e.model.position.z=data.z;e.model.rotation.y=data.rotation;if(e.hp>0){e.model.position.y=0;e.model.rotation.x=0;}}
       if(previous!==state.step)playObjective();
       paint();
       if(state.status==='failed'){panel.hidden=true;failure.hidden=false;document.exitPointerLock?.();}
       else {panel.hidden=false;failure.hidden=true;}
-      if(state.status==='complete')document.exitPointerLock?.();
+      if(state.status==='complete'&&transitionRemaining===null)document.exitPointerLock?.();
     },
+    guardImpact(position){blood(new THREE.Vector3(position.x,position.y||1.1,position.z));},
     blast,
     onShot(origin,noise){for(const e of enemies)if(e.hp>0&&e.model.position.distanceTo(origin)<noise){e.lastKnown=origin.clone();e.alertUntil=time+8;}},
     smoke(position){smokeClouds.push({...position,expires:Date.now()+16000});},
@@ -404,6 +410,7 @@ export function createCampaign({
     interact,
     aimMeshes,
     get bounds(){return 155;},
+    get canExplore(){return network&&(state.status==='waiting'||state.status==='active'&&networkWaiting);},
     get active() {
       return state.status !== "inactive";
     },

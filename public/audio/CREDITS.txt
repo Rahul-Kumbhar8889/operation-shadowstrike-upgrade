@@ -1,0 +1,12 @@
+Recorded firearm sounds: The Free Firearm Sound Library.
+Creators: Ben Jaszczak, Brian Nelson, Kevin Heras, Matthew Nanney.
+License: CC0 1.0 Universal. https://creativecommons.org/publicdomain/zero/1.0/
+Source: https://opengameart.org/content/the-free-firearm-sound-library
+Archive: Prepared SFX Library.7z. Selected single-shot recordings trimmed, filtered,
+limited and converted to mono Ogg Vorbis. See sources.json for source filenames/crops.
+
+Reload recording: SpringySpringo, Gun reload sounds, CC0 1.0 Universal.
+Source: https://opengameart.org/content/gun-reload-sounds
+Original file: assaultriflereload1_0.wav. Filtered/limited and converted to Ogg Vorbis.
+
+No Project I.G.I. or Counter-Strike recordings/assets are included.

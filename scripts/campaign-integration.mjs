@@ -3,11 +3,11 @@ const server=spawn(process.execPath,['node_modules/vite/bin/vite.js','--host','1
 try{
  await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('Vite timeout')),10000);server.stdout.on('data',d=>{if(d.toString().includes('5189')){clearTimeout(timer);resolve();}});server.once('exit',()=>reject(Error('Vite exited')));});
  browser=await chromium.launch({headless:true,executablePath:process.env.BROWSER_EXECUTABLE,args:['--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
- const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('http://127.0.0.1:5189');
+ const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('http://127.0.0.1:5189');await page.click('.eyebrow');
  const results=await page.evaluate(async()=>{
   const THREE=await import('/node_modules/three/build/three.module.js'),{createCampaign}=await import('/src/campaign.js'),{MISSIONS}=await import('/shared/campaign.js');
   const scene=new THREE.Scene(),player=new THREE.Group(),base=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshBasicMaterial());scene.add(player,base);const original={x:0,z:0,w:1,h:1,d:1,mesh:base},obstacles=[original];let damage=0;
-  const campaign=createCampaign({scene,player,obstacles,onDamage:n=>damage+=n,onReset:p=>player.position.set(p.x,0,p.z),message:()=>{},tracer:()=>{}});const panel=document.querySelectorAll('#missionPanel')[1];const ok=(v,msg)=>{if(!v)throw Error(msg);};const results=[];
+  const campaign=createCampaign({scene,player,obstacles,onDamage:n=>damage+=n,onReset:p=>player.position.set(p.x,0,p.z),message:()=>{},tracer:()=>{}});const panel=document.querySelectorAll('#missionPanel')[1];const ok=(v,msg)=>{if(!v)throw Error(msg);};const results=[];const audio=await import('/src/combatEffects.js');await audio.preloadCombatAudio();ok(audio.loadedAudioCount()===6,'all six recorded Ogg effects decode in the browser');
   for(let index=0;index<MISSIONS.length;index++){
    campaign.start(index);const m=MISSIONS[index];ok(!base.visible,'base scenery hidden');
    const guards=[...new Set(campaign.aimMeshes().map(mesh=>mesh.userData.guard))];ok(guards.length===m.guards.length,'guard population');
@@ -21,7 +21,7 @@ try{
     if(step===0){player.position.x+=4;campaign.update(.1,true);ok(panel.querySelector('.objective').textContent.includes(`OBJECTIVE 1/`),'leaving terminal interrupts action');player.position.x-=4;campaign.interact();}
     campaign.update(m.steps[step].duration-.1,true);ok(panel.querySelector('.objective').textContent.includes('Stay within'),'action cannot finish early');campaign.update(.11,true);
    }
-   ok(panel.querySelector('.objective').textContent.includes('REACH EXTRACTION'),'all objectives lead to extraction');player.position.set(...[m.extract[0],0,m.extract[1]]);campaign.interact();ok(!campaign.running,'extraction completes operation');ok(!panel.querySelector('.next').hidden,'next mission available');results.push(`${m.name}: timed objectives, interruption, combat and extraction`);
+   ok(panel.querySelector('.objective').textContent.includes('REACH EXTRACTION'),'all objectives lead to extraction');player.position.set(...[m.extract[0],0,m.extract[1]]);campaign.interact();ok(!campaign.running,'extraction completes operation');ok(panel.querySelector('.next').hidden===(index<3),'intermediate missions advance automatically; final campaign offers replay');results.push(`${m.name}: timed objectives, interruption, combat and extraction`);campaign.update(index<3?5.1:20,false);ok(panel.querySelector('h2').textContent===MISSIONS[Math.min(index+1,3)].name,'automatic next operation, with final campaign stop');
   }
   campaign.stop();ok(base.visible&&obstacles.length===1&&obstacles[0]===original,'original world and collision restored');return results;
  });

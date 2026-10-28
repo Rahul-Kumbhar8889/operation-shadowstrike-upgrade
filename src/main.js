@@ -1,3 +1,4 @@
+import {applyDeathPose} from './deathPose.js';
 import {createTouchControls} from './touchControls.js';
 import {EQUIPMENT,createEquipment,throwLanding,healHealth,smokeBlocks} from '../shared/equipment.js';
 import {createEquipmentEffects} from './equipmentEffects.js';
@@ -8,7 +9,7 @@ import { createLobbyConnection } from './multiplayerConnection.js';
 import { createBattlefield } from './battlefield.js';
 import { createSoldier } from './soldier.js';
 import { getWeaponImage } from './weaponImages.js';
-import { createCombatEffects, playReload, playHitConfirmation, playElimination, playFootstep, playHeal, playSmoke, playPin, playGunshot, setSoundMuted, unlockAudio } from './combatEffects.js';
+import { createCombatEffects, playReload, playHitConfirmation, playElimination, playFootstep, playHeal, playSmoke, playPin, playGunshot, setSoundMuted, unlockAudio, preloadCombatAudio, playGunshotAt, playInjury } from './combatEffects.js';
 import './style.css';
 import { createCampaign } from './campaign.js';
 import { CAMPAIGN_MAX_HP } from '../shared/campaign.js';
@@ -370,7 +371,7 @@ scene.add(soldier);
 
 const remotePlayers = new Map();
 let firstPerson = false;
-const campaign = createCampaign({scene, obstacles, player:soldier, message:showMessage, tracer:bulletTracer,
+const campaign = createCampaign({scene, obstacles, player:soldier, message:showMessage, tracer:bulletTracer, blood:position=>combatFX.bloodImpact(position),
   onDamage(damage) {
     if (!alive) return;
     hp=Math.max(0,hp-damage);flashDamage();updateHUD();
@@ -784,7 +785,7 @@ function showMuzzleFlash() {
 }
 
 function flashDamage() {
-  playGunshot('pistol',.12);
+  playInjury();
   $('#damageFlash').classList.add('active');
 
   setTimeout(() => {
@@ -873,7 +874,7 @@ function updateScoreboard(players) {
 }
 
 function resetPlayerWeapons(preserveWorldEffects=false) {
-  inventory=createEquipment();lastEquipment=0;if(!preserveWorldEffects){pendingThrows=[];smokeClouds=[];equipmentFX.clear();}
+  inventory=createEquipment();lastEquipment=0;if(!preserveWorldEffects){pendingThrows=[];smokeClouds=[];equipmentFX.clear();combatFX.dispose();}
   ammoByWeapon = createAmmo();
 
   reloadToken++;
@@ -886,8 +887,8 @@ function resetPlayerWeapons(preserveWorldEffects=false) {
 function enterRoom(response) {
   campaign.stop();firstPerson=false;soldier.rotation.set(0,0,0);
   currentRoom = response.code;lastRoomCode=response.code;
-  updateRound(response.round);
   multiplayerActive = true;coopMode=response.mode==='coop';
+  updateRound(response.round);
 
   alive = true;
   hp = coopMode?CAMPAIGN_MAX_HP:100;
@@ -941,10 +942,11 @@ async function requestRoom(eventName, code) {
   }
 }
 
-$('#createCoop').onclick=()=>requestRoom('create-coop',Number($('#missionSelect').value));
-$('#createRoom').onclick = () => requestRoom('create-room');
+$('#createCoop').onclick=()=>{preloadCombatAudio();return requestRoom('create-coop',Number($('#missionSelect').value));};
+$('#createRoom').onclick = () => {preloadCombatAudio();return requestRoom('create-room');};
 
 $('#joinRoom').onclick = () => {
+  preloadCombatAudio();
   const code = $('#roomCode').value.trim().toUpperCase();
 
   if (code.length !== 6) {
@@ -956,11 +958,13 @@ $('#joinRoom').onclick = () => {
 };
 
 $('#campaign').onclick = () => {
+  preloadCombatAudio();
   lobbyConnection.cancel();multiplayerActive=false;currentRoom=null;clearRemotePlayers();
   $('#lobby').classList.add('hidden');$('#networkStatus').textContent='STORY OPERATIONS';
   campaign.start(Number($('#missionSelect').value));updateMouseHint();
 };
 $('#training').onclick = () => {
+  preloadCombatAudio();
   campaign.stop();alive=true;hp=100;soldier.position.set(0,0,0);
 
   lobbyConnection.cancel();
@@ -1153,7 +1157,7 @@ socket.on('shot-fired', (data) => {
   bulletTracer(data.origin, data.direction, data.distance);
 
   if (data.shooterId !== socket.id) {
-    if(!data.pellet || data.pellet===0)playGunshot(data.weapon,.4);
+    if(!data.pellet || data.pellet===0)playGunshotAt(data.weapon,data.origin,soldier.position,yaw);
     const remote = remotePlayers.get(data.shooterId);
 
     if (remote) {
@@ -1193,6 +1197,7 @@ socket.on('target-destroyed', (data) => {
 
 socket.on('player-hit', (data) => {
   if (!multiplayerActive) return;
+  const struck=data.targetId===socket.id?soldier:remotePlayers.get(data.targetId)?.group;if(struck)combatFX.bloodImpact(struck.position.clone().add(new THREE.Vector3(0,1.15,0)));
 
   if (data.targetId === socket.id) {
     hp = data.hp;
@@ -1242,7 +1247,7 @@ socket.on('player-killed', (data) => {
 
   const remote = remotePlayers.get(data.victimId);
 
-  if (remote) {remote.alive=false;remote.group.visible = false;}
+  if (remote) {remote.alive=false;remote.deathAge=0;remote.group.visible = true;}
 });
 
 socket.on('player-respawned', (data) => {
@@ -1270,7 +1275,7 @@ socket.on('player-respawned', (data) => {
       remote.targetPosition.set(data.position.x, 0, data.position.z);
 
       remote.group.position.copy(remote.targetPosition);
-      remote.alive=true;remote.group.visible = true;
+      remote.alive=true;remote.deathAge=0;remote.group.rotation.x=0;if(remote.group.userData.aimRig)remote.group.userData.aimRig.rotation.x=0;remote.group.visible = true;
 
       if (WEAPONS[data.weapon]) {
         remote.weapon = data.weapon;
@@ -1281,9 +1286,9 @@ socket.on('player-respawned', (data) => {
 });
 
 socket.on('coop-state',snapshot=>{if(!multiplayerActive||!coopMode)return;campaign.sync(snapshot);updateMouseHint();});
-socket.on('coop-guard-hit',data=>{if(!coopMode)return;if(data.shooterId===socket.id){showHitMarker();playHitConfirmation();}});
-socket.on('coop-guard-fired',data=>{if(!coopMode)return;const origin=new THREE.Vector3(data.origin.x,data.origin.y,data.origin.z),direction=new THREE.Vector3(data.target.x,data.target.y,data.target.z).sub(origin);bulletTracer(origin,direction.clone().normalize(),direction.length());if(origin.distanceTo(soldier.position)<35)playGunshot('assault',.25);});
-socket.on('coop-player-down',data=>{if(!coopMode)return;if(data.id===socket.id){alive=false;hp=0;firstPerson=false;reloading=false;reloadToken++;fireHeld=false;updateHUD();showMessage('YOU ARE DOWN — your teammate can finish. Restart is available if the squad fails.');}else{const remote=remotePlayers.get(data.id);if(remote)remote.alive=false;}});
+socket.on('coop-guard-hit',data=>{if(!coopMode)return;if(data.position)campaign.guardImpact(data.position);if(data.shooterId===socket.id){showHitMarker();playHitConfirmation();}});
+socket.on('coop-guard-fired',data=>{if(!coopMode)return;const origin=new THREE.Vector3(data.origin.x,data.origin.y,data.origin.z),direction=new THREE.Vector3(data.target.x,data.target.y,data.target.z).sub(origin);bulletTracer(origin,direction.clone().normalize(),direction.length());if(origin.distanceTo(soldier.position)<80)playGunshotAt('assault',data.origin,soldier.position,yaw);});
+socket.on('coop-player-down',data=>{if(!coopMode)return;if(data.id===socket.id){alive=false;hp=0;firstPerson=false;reloading=false;reloadToken++;fireHeld=false;updateHUD();showMessage('YOU ARE DOWN — your teammate can finish. Restart is available if the squad fails.');}else{const remote=remotePlayers.get(data.id);if(remote){remote.alive=false;remote.deathAge=0;}}});
 socket.on('coop-reset',data=>{if(!coopMode)return;campaign.start(data.coop.index,{network:true});campaign.sync(data.coop);const self=data.players.find(p=>p.id===socket.id);alive=true;hp=self.hp;soldier.position.set(self.position.x,0,self.position.z);resetPlayerWeapons();for(const p of data.players)addRemotePlayer(p);updateScoreboard(data.players);updateHUD();updateMouseHint();});
 
 socket.on('disconnect', (reason) => {
@@ -1508,7 +1513,7 @@ const touchControls=createTouchControls({canvas:renderer.domElement,keys,
  fire(){fireHeld=true;shoot();},stopFire(){fireHeld=false;},reload,nextWeapon,
  interact:()=>campaign.active&&campaign.interact(),equipment:useEquipment,
  camera:()=>{firstPerson=!firstPerson;},menu:leaveGame,
- active:()=>gameActive()&&alive&&(!campaign.active||campaign.running)&&!document.querySelector('#instructions')?.open});
+ active:()=>gameActive()&&alive&&(!campaign.active||campaign.running||campaign.canExplore)&&!document.querySelector('#instructions')?.open});
 const instructions=document.createElement('dialog');instructions.id='instructions';
 instructions.innerHTML=`<h2>FIELD MANUAL</h2><p><strong>Multiplayer:</strong> create a room and share its six-character code. Your friend opens this same link and joins. First to five kills wins. Respawn takes three seconds; both players must agree to rematch.</p><p><strong>Co-op:</strong> select an operation and Create Co-op Mission Room. Both players join by code, then Start Mission. Guard damage and objectives are shared by the server; teammates cannot hurt each other. Both living players must reach extraction. If both die, restart together.<br><strong>Story:</strong> choose one of four solo operations. Follow numbered objectives, clear guards within 12m, approach within 2.4m and use E. Stay near the terminal until its action finishes, then reach extraction.</p><p><strong>Desktop:</strong> WASD move, Shift sprint, mouse look, click fire, R reload, 1–9 weapons, G frag, B smoke, H heal, V view, M menu, Esc release mouse. Z scopes the sniper.</p><p><strong>Phone:</strong> landscape works best. Left joystick moves; drag the scene to look. Hold FIRE for automatic weapons. Buttons reload, switch guns, use equipment and interact.</p><p>Three healing injections per life: +350 story HP or +35 multiplayer HP, capped at maximum. Smoke conceals but does not stop bullets. Frag grenades hurt enemies; self damage is disabled.</p><button autofocus>CLOSE MANUAL</button>`;
 document.body.append(instructions);instructions.querySelector('button').onclick=()=>instructions.close();$('#howToPlay').onclick=()=>instructions.showModal();
@@ -1523,12 +1528,12 @@ function mouseLocked() {
 
 function updateMouseHint() {
   $('#mouseHint').style.display =
-    gameActive() && alive && (!campaign.active || campaign.running) && !mouseLocked() ? 'block' : 'none';
+    gameActive() && alive && (!campaign.active || campaign.running || campaign.canExplore) && !mouseLocked() ? 'block' : 'none';
 }
 
 renderer.domElement.addEventListener('pointerdown', (event) => {
   if(touchControls.enabled)return;
-  if (!gameActive() || !alive || (campaign.active && !campaign.running)) return;
+  if (!gameActive() || !alive || (campaign.active && !campaign.running&&!campaign.canExplore)) return;
 
   if (!mouseLocked()) {
     if (event.button === 0) {
@@ -1568,6 +1573,7 @@ window.addEventListener('keydown', (event) => {
 
   if (event.repeat) return;
 
+  if(event.code==='Enter'&&coopMode&&!campaign.running)socket.emit('coop-start');
   if (event.code === 'KeyR') reload();
   if (event.code === 'KeyG') useEquipment('frag');
   if (event.code === 'KeyB') useEquipment('smoke');
@@ -1614,13 +1620,13 @@ function animate() {
   touchControls.update();
   if(!gameActive()){fireHeld=false;if(!lobbyRendered){renderer.render(scene,camera);lobbyRendered=true;}return;}
   lobbyRendered=false;
-  if(coopMode&&!campaign.running){const now=performance.now();if(now-lastWaitingFrame<200)return;lastWaitingFrame=now;}
+  if(coopMode&&!campaign.running&&!mouseLocked()){const now=performance.now();if(now-lastWaitingFrame<200)return;lastWaitingFrame=now;}
   let moving = false;
   if(fireHeld && mouseLocked() && gameActive() && alive && WEAPONS[currentWeapon].automatic)shoot();
 
   const sprinting = !!keys.ShiftLeft || !!keys.ShiftRight;
 
-  if (gameActive() && alive && mouseLocked() && (!campaign.active || campaign.running)) {
+  if (gameActive() && alive && mouseLocked() && (!campaign.active || campaign.running || campaign.canExplore)) {
     const speed = (sprinting ? 9 : 5) * dt;
 
     const forward = Number(!!keys.KeyW) - Number(!!keys.KeyS);
@@ -1715,7 +1721,8 @@ function animate() {
   }
 
   for (const remote of remotePlayers.values()) {
-    remote.group.visible=remote.alive!==false;
+    if(remote.alive===false){remote.group.visible=true;remote.deathAge=(remote.deathAge||0)+dt;applyDeathPose(remote.group,remote.deathAge);continue;}
+    remote.group.visible=true;
     const previous = remote.group.position.clone();
 
     remote.group.position.lerp(remote.targetPosition, Math.min(1, dt * 12));

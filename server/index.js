@@ -8,7 +8,7 @@ import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { resolve, extname, sep } from 'node:path';
 const publicRoot = resolve('dist');
-const MIME = {'.html':'text/html; charset=utf-8','.js':'text/javascript','.css':'text/css','.glb':'model/gltf-binary','.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp','.svg':'image/svg+xml','.json':'application/json'};
+const MIME = {'.ogg':'audio/ogg','.wav':'audio/wav','.txt':'text/plain; charset=utf-8','.html':'text/html; charset=utf-8','.js':'text/javascript','.css':'text/css','.glb':'model/gltf-binary','.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp','.svg':'image/svg+xml','.json':'application/json'};
 
 
 // OPERATION SHADOWSTRIKE
@@ -444,6 +444,12 @@ function damagePlayer(code,room,shooterId,targetId,damage,weaponId){
     sendState(code,room);
 }
 
+function resetCoopRoom(code,room,index,autoStart=false){
+    room.coop=createCoop(index);if(autoStart)room.coop.status='active';room.generation++;room.smokes=[];
+    for(const [id,p] of room.players){cancelReload(p);Object.assign(p,{position:coopSpawn(room.coop,p.slot),hp:CAMPAIGN_MAX_HP,alive:true,kills:0,deaths:0,ammo:createAmmo(),equipment:createEquipment(),weapon:DEFAULT_WEAPON,lastShot:0,lastEquipment:0,lastMove:Date.now()});const client=io.sockets.sockets.get(id);if(client)sendWeaponState(client,p);}
+    io.to(code).emit('coop-reset',{coop:coopSnapshot(room),players:allPlayers(room)});sendState(code,room);
+}
+
 // ================================================
 // SOCKET CONNECTION
 // ================================================
@@ -465,10 +471,7 @@ io.on('connection', (socket) => {
   socket.on('coop-interact',()=>{const code=socket.data.roomCode,room=rooms.get(code);if(room?.coop){interactCoop(room,socket.id);sendState(code,room);}});
   socket.on('coop-restart',(next=false)=>{
     const code=socket.data.roomCode,room=rooms.get(code);if(!room?.coop||!['failed','complete'].includes(room.coop.status))return;
-    const index=next&&room.coop.status==='complete'?(room.coop.index+1)%MISSIONS.length:room.coop.index;
-    room.coop=createCoop(index);room.generation++;room.smokes=[];
-    for(const [id,p] of room.players){cancelReload(p);Object.assign(p,{position:coopSpawn(room.coop,p.slot),hp:CAMPAIGN_MAX_HP,alive:true,kills:0,deaths:0,ammo:createAmmo(),equipment:createEquipment(),weapon:DEFAULT_WEAPON,lastShot:0,lastEquipment:0,lastMove:Date.now()});const client=io.sockets.sockets.get(id);if(client)sendWeaponState(client,p);}
-    io.to(code).emit('coop-reset',{coop:coopSnapshot(room),players:allPlayers(room)});sendState(code,room);
+    const index=next&&room.coop.status==='complete'?(room.coop.index+1)%MISSIONS.length:room.coop.index;resetCoopRoom(code,room,index);
   });
   socket.on('create-room', (callback) => {
     if (typeof callback !== 'function') {
@@ -580,7 +583,7 @@ io.on('connection', (socket) => {
       return;
     }
 
-    if(room.coop){if(!canCoopAct(room)||blocked(x,z,room.coop.boxes))return;}else if (collides(x, z)) return;
+    if(room.coop){if(!['waiting','active'].includes(room.coop.status)||blocked(x,z,room.coop.boxes))return;}else if (collides(x, z)) return;
 
     const now = Date.now();
 
@@ -911,7 +914,7 @@ io.on('connection', (socket) => {
 });
 
 // Fixed-rate server simulation: both clients receive identical guard/objective state.
-setInterval(()=>{for(const [code,room] of rooms){if(!room.coop)continue;updateCoop(room,.1,Date.now(),rayBoxDistance,(event,data)=>io.to(code).emit(event,data));room.coop.broadcastTick=(room.coop.broadcastTick||0)+1;if(room.coop.broadcastTick%2===0)io.to(code).emit('coop-state',coopSnapshot(room));if(room.coop.broadcastTick%10===0)io.to(code).emit('game-state',allPlayers(room));}},100).unref();
+setInterval(()=>{for(const [code,room] of rooms){if(!room.coop)continue;const result=updateCoop(room,.1,Date.now(),rayBoxDistance,(event,data)=>io.to(code).emit(event,data));if(result==='advance')resetCoopRoom(code,room,room.coop.index+1,true);room.coop.broadcastTick=(room.coop.broadcastTick||0)+1;if(room.coop.broadcastTick%2===0)io.to(code).emit('coop-state',coopSnapshot(room));if(room.coop.broadcastTick%10===0)io.to(code).emit('game-state',allPlayers(room));}},100).unref();
 
 httpServer.listen(port, '0.0.0.0', () => {
   console.log(`Multiplayer server running on port ${httpServer.address().port}`);

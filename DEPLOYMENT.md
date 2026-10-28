@@ -96,3 +96,15 @@ Both living teammates must be within 4m of extraction; the operator interacting 
 `npm test` includes shared co-op simulation and two-client Socket.IO checks. `node scripts/coop-browser.mjs` exercises two isolated browser sessions joining the same operation, start synchronization and departure pause. Unit tests simulate combat and complete all four ordered objective chains; these are not full human playthroughs.
 
 Co-op rendering uses the detailed operator within 38m and a human-shaped low-detail silhouette farther away. Hit validation remains server-owned. Lobby rendering is idle after the first frame; a waiting co-op room renders at a reduced rate. A longer heartbeat timeout tolerates first-frame loading on slower devices. Browser smoke checks do not establish performance on physical phones or a complete human playthrough of each operation.
+
+## Campaign continuity and combat feedback
+
+Operations 1–3 advance automatically after a five-second completion countdown. Solo advances locally; co-op advances through the authoritative server and sends the next active operation to both clients together, restoring health and equipment. A missing teammate pauses the co-op countdown. Operation four ends the campaign; it does not loop automatically. Pointer lock is retained during intermediate transitions when already active.
+
+Guards now animate into a bent-limb prone pose instead of snapping flat or disappearing. Corpses remain until the operation resets. Brief non-dismembering blood particles and bounded floor marks provide hit feedback. The ground marks expire and all combat effects are cleared on a fresh operation.
+
+Gunshots now use selected CC0 recordings from The Free Firearm Sound Library; reload uses SpringySpringo's CC0 airsoft recording. Source/license/crop details ship at `/audio/CREDITS.txt` and `/audio/sources.json`. Files are self-hosted, preloaded on mode selection and decoded with Web Audio; procedural noise remains a fallback while loading or if a file fails. Remote gunshots have stereo placement and distance attenuation. No IGI or Counter-Strike audio assets are copied.
+
+Waiting co-op players may move/look around; guard simulation, firing and mission progression remain paused until two players start the operation. The co-op scoreboard is initialized after the room mode is known.
+
+These changes do not replace the procedural soldiers with photorealistic scanned/rigged military characters, and the existing objective installations still use abstract terminal interactions. Full ragdoll physics, varied rescue/destruction objectives and a high-fidelity art overhaul remain outside this update.
