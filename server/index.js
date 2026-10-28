@@ -1,4 +1,4 @@
-import {createCoop,coopSnapshot,coopSpawn,canCoopAct,updateCoop,interactCoop,hurtGuard,coopBlast} from './coop.js';
+import {alertCoopGuards,createCoop,coopSnapshot,coopSpawn,canCoopAct,updateCoop,interactCoop,hurtGuard,coopBlast} from './coop.js';
 import {MISSIONS,blocked,CAMPAIGN_MAX_HP} from '../shared/campaign.js';
 import {EQUIPMENT,createEquipment,throwLanding,blastDamage,healHealth} from '../shared/equipment.js';
 import { WEAPONS, createAmmo, shotDirections } from '../shared/weapons.js';
@@ -747,6 +747,7 @@ io.on('connection', (socket) => {
     shooter.lastShot = now;
 
     shooter.ammo[shooter.weapon]--;
+    if(room.coop)alertCoopGuards(room,shooter.position,weapon.noise);
 
     sendAmmo(socket, shooter);
 

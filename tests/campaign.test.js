@@ -17,7 +17,8 @@ for (let index = 0; index < MISSIONS.length; index++) {
     let progress=initial;
     for(let step=0;step<m.steps.length;step++){
       if(step+1<m.steps.length)assert.equal(interactMission(progress,pos(m.steps[step+1].position),0),progress,'cannot skip objectives');
-      assert.equal(interactMission(progress,pos(m.steps[step].position),1),progress,'nearby guard blocks interaction');
+      if(m.steps[step].kind==='defend')assert.equal(interactMission(progress,pos(m.steps[step].position),1).step,step+1,'defense permits enemy presence');
+      else assert.equal(interactMission(progress,pos(m.steps[step].position),1),progress,'nearby guard blocks equipment interaction');
       progress=interactMission(progress,pos(m.steps[step].position),0);
       assert.equal(progress.step,step+1);
     }

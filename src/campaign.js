@@ -7,6 +7,7 @@ import { createSoldier } from "./soldier.js";
 import { createEnvironmentTextures,createTerrainTexture } from "./environmentTextures.js";
 import {
   MISSIONS,
+  objectiveSafe,
   missionWalls,
   interactMission,
   blocked,
@@ -20,8 +21,11 @@ export function createCampaign({
   message,
   tracer,
   blood=()=>{},
+  demolition=()=>{},
 }) {
   const textures=createEnvironmentTextures();textures.ground.dispose();textures.ground=createTerrainTexture();textures.ground.repeat.set(15,15);
+  const baseAtmosphere={background:scene.background,fog:scene.fog?.clone(),lights:scene.children.filter(o=>o.isLight).map(light=>({light,color:light.color.clone(),intensity:light.intensity}))};
+  const operationSkies=new Map();
   const baseColliders=[...obstacles];
   const baseWorld=scene.children.filter(o=>!o.isLight && o!==player);
   const group = new THREE.Group();
@@ -32,13 +36,13 @@ export function createCampaign({
     colliders = [],
     time = 0,
     exit = () => {},
-    beacon, task=null, smokeClouds=[],network=false,networkWaiting=false,networkAction=()=>{},transitionRemaining=null;
+    beacon, task=null, smokeClouds=[],network=false,networkWaiting=false,networkSynced=false,networkAction=()=>{},transitionRemaining=null,objectiveProps=[],completedEffects=new Set();
   const ray = new THREE.Raycaster(),
     panel = document.createElement("section");
   panel.id = "missionPanel";
   panel.hidden = true;
   panel.innerHTML =
-    '<small>SHADOWSTRIKE / FIELD OPERATIONS</small><h2></h2><p class="brief"></p><p class="objective"></p><canvas class="radar" width="280" height="150" aria-label="Tactical map: blue player, red guards, green terminal, cyan extraction"></canvas><p>E interact • V camera • Esc release cursor</p><button class="start" hidden>START CO-OP MISSION</button><button class="next" hidden>NEXT OPERATION</button><button class="retry">RESTART MISSION</button><button class="exit">RETURN TO MENU</button>';
+    '<small>SHADOWSTRIKE / FIELD OPERATIONS</small><h2></h2><p class="brief"></p><p class="objective"></p><progress class="task-progress" max="1" value="0" hidden aria-label="Objective action progress"></progress><details class="operation-plan"><summary>OPERATION PLAN</summary><ol></ol></details><canvas class="radar" width="280" height="150" aria-label="Tactical map: blue player, red guards, green terminal, cyan extraction"></canvas><p>E interact • V camera • Esc release cursor</p><button class="start" hidden>START CO-OP MISSION</button><button class="next" hidden>NEXT OPERATION</button><button class="retry">RESTART MISSION</button><button class="exit">RETURN TO MENU</button>';
   document.body.append(panel);
   const failure = document.createElement("section");
   failure.id = "missionFailure";
@@ -82,18 +86,32 @@ export function createCampaign({
     gs.forEach((g) => g.dispose());
     ms.forEach((m) => {if(m.map?.isCanvasTexture && !Object.values(textures).includes(m.map))m.map.dispose();m.dispose();});
     group.clear();
+    scene.background=baseAtmosphere.background??null;
+    if(baseAtmosphere.fog)scene.fog=baseAtmosphere.fog.clone();
+    for(const {light,color,intensity} of baseAtmosphere.lights){light.color.copy(color);light.intensity=intensity;}
   }
   function start(index = 0,options={}) {
-    network=!!options.network;networkWaiting=network;
+    network=!!options.network;networkWaiting=network;networkSynced=false;
     cleanup();
     obstacles.length=0;
     for(const o of baseWorld)o.visible=false;
     failure.hidden = true;transitionRemaining=null;
     state = { index, status: "active", intel: false, step:0 };
-    time = 0;task=null;smokeClouds=[];
+    time = 0;task=null;smokeClouds=[];objectiveProps=[];completedEffects.clear();
     group.visible = true;
     panel.hidden = false;
     const m = MISSIONS[index];
+    const sky=[0xb6c3bd,0x92a6ac,0x556879,0xc6c4b2][index];
+    if(!operationSkies.has(index)){
+      const canvas=document.createElement('canvas');canvas.width=256;canvas.height=128;
+      const ctx=canvas.getContext('2d'),gradient=ctx.createLinearGradient(0,0,0,128);
+      gradient.addColorStop(0,index===2?'#142d48':'#507c97');gradient.addColorStop(.5,`#${sky.toString(16).padStart(6,'0')}`);gradient.addColorStop(1,index===2?'#2a393e':'#727765');ctx.fillStyle=gradient;ctx.fillRect(0,0,256,128);
+      const texture=new THREE.CanvasTexture(canvas);texture.mapping=THREE.EquirectangularReflectionMapping;texture.colorSpace=THREE.SRGBColorSpace;operationSkies.set(index,texture);
+    }
+    scene.background=operationSkies.get(index);
+    if(scene.fog){scene.fog.color.setHex(sky);scene.fog.near=index===2?65:110;scene.fog.far=index===2?260:350;}
+    for(const {light,intensity} of baseAtmosphere.lights){if(light.isDirectionalLight){light.intensity=intensity*(index===2?.38:index===3?.85:1);light.color.setHex(index===2?0x9cb9df:0xffe4bd);}else if(light.isHemisphereLight)light.intensity=intensity*(index===2?.65:1);}
+
     const floor=mesh(new THREE.PlaneGeometry(500,500),index===1?0x5a655a:0x8a8061,0,-.02,0);floor.rotation.x=-Math.PI/2;floor.material.map=textures.ground;floor.material.bumpMap=textures.ground;floor.material.bumpScale=.04;floor.material.color.set(0xffffff);
     const treeGeometry=new THREE.ConeGeometry(2.7,9,7),treeMaterial=new THREE.MeshStandardMaterial({color:0x42533c});
     const trees=new THREE.InstancedMesh(treeGeometry,treeMaterial,100),dummy=new THREE.Object3D();
@@ -121,21 +139,34 @@ export function createCampaign({
     }
     mesh(new THREE.BoxGeometry(10, 0.08, 8), 0x55594f, x, 0.04, z);
     mesh(new THREE.BoxGeometry(10.4, 0.16, 8.4), 0x343c35, x, 3.6, z);
-    mesh(
-      new THREE.BoxGeometry(1.3, 0.9, 0.65),
-      0x394a40,
-      objective[0],
-      0.5,
-      objective[1],
-    );
-    const terminal = mesh(
-      new THREE.BoxGeometry(0.8, 0.5, 0.1),
-      0x38e9ad,
-      objective[0],
-      1.2,
-      objective[1],
-    );
-    terminal.material.emissive.set(0x1f926a);
+    const step=m.steps[i],ox=objective[0],oz=objective[1],parts=[];
+    const part=(geometry,color,dx,y,dz)=>{const o=mesh(geometry,color,ox+dx,y,oz+dz);parts.push(o);return o;};
+    let indicator;
+    if(step.kind==='recover'){
+      part(new THREE.BoxGeometry(1.25,.7,.7),0x465547,0,.4,0);
+      part(new THREE.TorusGeometry(.19,.035,6,12,Math.PI),0xb5baa5,0,.85,0);
+      for(const dx of [-.42,.42])part(new THREE.BoxGeometry(.08,.62,.74),0xadb2a0,dx,.4,0);
+      indicator=part(new THREE.SphereGeometry(.07,8,6),0x50efb1,.4,.8,0);
+    }else if(step.kind==='switch'){
+      part(new THREE.BoxGeometry(.9,1.45,.45),0x66726b,0,.76,0);
+      const lever=part(new THREE.CylinderGeometry(.045,.045,.45,8),0xb8b49d,0,1.05,.3);lever.rotation.z=.65;
+      indicator=part(new THREE.SphereGeometry(.075,8,6),0x50efb1,.25,1.3,.26);
+    }else if(step.kind==='download'){
+      part(new THREE.BoxGeometry(1.2,1.9,.7),0x263a40,0,.98,0);
+      for(let n=0;n<5;n++)part(new THREE.BoxGeometry(1.05,.18,.08),0x53696c,0,.35+n*.28,.39);
+      indicator=part(new THREE.BoxGeometry(.55,.25,.04),0x50efb1,0,1.65,.4);
+    }else if(step.kind==='plant'){
+      part(new THREE.CylinderGeometry(.5,.5,1.35,14),0x647267,0,.72,0);
+      for(const dx of [-.14,0,.14])part(new THREE.CylinderGeometry(.07,.07,.38,8),0x794334,dx,1,.52);
+      indicator=part(new THREE.BoxGeometry(.25,.14,.06),0x50efb1,0,1.05,.62);
+    }else{
+      part(new THREE.BoxGeometry(1.15,.7,.7),0x3b5148,0,.4,0);
+      part(new THREE.CylinderGeometry(.025,.025,1.9,6),0x919d91,.4,1.65,0);
+      indicator=part(new THREE.BoxGeometry(.5,.2,.05),0x50efb1,-.1,.58,.39);
+      const zone=part(new THREE.TorusGeometry(step.radius,.055,6,64),0x4e9eae,0,.08,0);zone.rotation.x=Math.PI/2;
+    }
+    indicator.material.emissive.set(0x1f926a);
+    objectiveProps.push({parts,indicator,kind:step.kind});
     const light = new THREE.PointLight(0xc6dec9, 18, 11);
     light.position.set(x, 2.8, z);
     group.add(light);
@@ -143,6 +174,16 @@ export function createCampaign({
     const ctx=labelCanvas.getContext('2d');ctx.fillStyle='#14251d';ctx.fillRect(0,0,512,64);ctx.fillStyle='#d9e5ca';ctx.font='bold 24px monospace';ctx.textAlign='center';ctx.fillText(`${i+1} / ${m.actions[i]}`,256,42);
     const texture=new THREE.CanvasTexture(labelCanvas);texture.colorSpace=THREE.SRGBColorSpace;
     const sign=mesh(new THREE.PlaneGeometry(7,.8),0xffffff,x,2.7,z+4.2);sign.material.map=texture;
+    mesh(new THREE.BoxGeometry(2.25,.12,.45),0x353e38,x,3.1,z+4.1);
+    for(const dx of [-1.12,1.12])mesh(new THREE.BoxGeometry(.12,3.1,.45),0x414a43,x+dx,1.55,z+4.1);
+    mesh(new THREE.CylinderGeometry(.27,.3,.6,10),0x7a8177,x+2,4,z);
+    for(const dx of [-3,3]){
+      mesh(new THREE.BoxGeometry(1.45,.85,.07),0x263e42,x+dx,1.7,z+4.19);
+      for(const offset of [-.72,.72])mesh(new THREE.BoxGeometry(.06,.95,.1),0x525e55,x+dx+offset,1.7,z+4.24);
+      mesh(new THREE.BoxGeometry(1.5,.06,.1),0x525e55,x+dx,2.15,z+4.24);
+      mesh(new THREE.BoxGeometry(1.5,.06,.1),0x525e55,x+dx,1.25,z+4.24);
+    }
+    const fixture=mesh(new THREE.BoxGeometry(1.5,.07,.22),0xceddcc,x,3.45,z);fixture.material.emissive.set(0x63745c);
     // Interior desks and equipment establish scale without closing the passage.
     mesh(new THREE.BoxGeometry(1.8,.75,.7),0x485348,x-2,.4,z-2.6);
     mesh(new THREE.BoxGeometry(.7,1.8,.5),0x303c35,x+3,1,z-2.8);
@@ -162,6 +203,31 @@ export function createCampaign({
     const radarBase=prop(-45,110,5,6,5,0x657269);
     const dish=mesh(new THREE.SphereGeometry(4,20,12,0,Math.PI*2,0,Math.PI/2),0xb1b9ad,-45,9,110);dish.rotation.z=.7;dish.material.side=THREE.DoubleSide;
     if(index===3){const runway=mesh(new THREE.PlaneGeometry(18,230),0x494e49,0,.01,0);runway.rotation.x=-Math.PI/2;for(let n=0;n<20;n++){const stripe=mesh(new THREE.PlaneGeometry(.3,5),0xd0c8a5,0,.025,-105+n*11);stripe.rotation.x=-Math.PI/2;}}
+    // Mission-specific silhouettes are solid cover with shared server collision.
+    for(const p of m.landmarks){
+      const {x,z,w,h,d,kind}=p;
+      const solid=prop(x,z,w,h,d,kind==='wagon'?0x655845:0x53645a);
+      if(kind==='wagon'){
+        for(const dx of [-6,6])for(const dz of [-1.85,1.85]){const wheel=mesh(new THREE.CylinderGeometry(.5,.5,.18,12),0x242b2a,x+dx,.5,z+dz);wheel.rotation.x=Math.PI/2;}
+        for(const dz of [-1,1])mesh(new THREE.BoxGeometry(66,.1,.12),0x545d5a,-59,.08,z+dz);
+        for(let n=0;n<9;n++)mesh(new THREE.BoxGeometry(.08,2.8,.05),0x3a423c,x-7+n*1.75,2,z+1.94);
+      }else if(kind==='antenna'){
+        for(let n=0;n<5;n++){const mast=mesh(new THREE.CylinderGeometry(.12,.2,5,8),0x9aa59e,x,7+n*4,z);}
+        for(const dx of [-1,1])mesh(new THREE.BoxGeometry(.4,3,.7),0xc2c8bc,x+dx,20,z);
+        mesh(new THREE.BoxGeometry(3,.2,.2),0x9aa59e,x,20,z);
+      }else if(kind==='truck'){
+        const cab=mesh(new THREE.BoxGeometry(2.65,1.25,2),0x405446,x,2,z+2.7);
+        mesh(new THREE.BoxGeometry(2.2,.65,.04),0x24424a,x,2.15,z+3.72);
+        for(const dx of [-1.5,1.5])for(const dz of [-2,2]){const wheel=mesh(new THREE.CylinderGeometry(.55,.55,.25,12),0x242b2a,x+dx,.55,z+dz);wheel.rotation.z=Math.PI/2;}
+      }else if(kind==='aircraft'){
+        solid.visible=false;
+        const body=mesh(new THREE.CapsuleGeometry(1.8,19,6,16),0x858e87,x,2,z);body.rotation.x=Math.PI/2;
+        mesh(new THREE.BoxGeometry(18,.15,4),0x717d75,x,2,z+1);
+        mesh(new THREE.BoxGeometry(.2,4,4),0x717d75,x,4,z+9);
+        mesh(new THREE.BoxGeometry(8,.15,2.5),0x717d75,x,2.8,z+9);
+        for(const dx of [-3,3]){const engine=mesh(new THREE.CylinderGeometry(.7,.7,3,12),0x3e4c46,x+dx,1.2,z+1);engine.rotation.x=Math.PI/2;}
+      }
+    }
     // Long lanes, cargo cover and a marked extraction landing pad.
     for(let n=0;n<6;n++){
       const x=-5,z=55-n*22,w=5,h=3,d=12;
@@ -199,8 +265,14 @@ export function createCampaign({
     q("h2").textContent = m.name;
     q(".brief").textContent = m.brief;
     const step=state.step||0, current=m.steps[step];
-    q('.objective').textContent=state.status==='failed'?'MISSION FAILED':state.status==='complete'?'OPERATION COMPLETE':current?`OBJECTIVE ${step+1}/${m.steps.length}: ${current.action} • E near terminal • ${left} guards alive`:'REACH EXTRACTION • Clear nearby guards and press E';
-    if(task && state.status==='active')q('.objective').textContent=`${current.action} • ${Math.ceil(task.remaining)}s • Stay within 2.4m; nearby threats interrupt`;
+    const progress=q('.task-progress');progress.hidden=!task;progress.value=task&&current?Math.max(0,1-task.remaining/current.duration):0;
+    const plan=q('.operation-plan ol');
+    const planKey=`${state.index}:${step}`;
+    if(plan.dataset.key!==planKey){plan.dataset.key=planKey;plan.replaceChildren(...m.steps.map((item,i)=>{const li=document.createElement('li');li.textContent=`${i<step?'✓ ':i===step?'→ ':''}${item.action}`;if(i===step)li.setAttribute('aria-current','step');return li;}));}
+
+    for(let i=0;i<objectiveProps.length;i++){const prop=objectiveProps[i],done=i<step;if(done&&!completedEffects.has(i)){completedEffects.add(i);if(prop.kind==='plant'){const [x,z]=m.steps[i].position;if(!network||networkSynced)demolition(new THREE.Vector3(x,1,z));for(const o of prop.parts)o.material.color.multiplyScalar(.25);}}for(const o of prop.parts)o.visible=!(done&&(prop.kind==='recover'||prop.kind==='plant'&&o===prop.indicator));prop.indicator.material.color.set(done?0x66716c:i===step?0x50efb1:0xcb984c);prop.indicator.material.emissive.set(done?0x000000:i===step?0x1f926a:0x392400);}
+    q('.objective').textContent=state.status==='failed'?'MISSION FAILED':state.status==='complete'?'OPERATION COMPLETE':current?`OBJECTIVE ${step+1}/${m.steps.length}: ${current.action} • ${current.hint} • Press E at the marked equipment • ${left} guards alive`:'REACH EXTRACTION • Clear nearby guards and press E';
+    if(task && state.status==='active')q('.objective').textContent=`${current.action} • ${Math.ceil(task.remaining)}s • Stay within ${current.radius}m${current.kind==='defend'?' — KEEP FIGHTING; defend the relay':' — nearby threats interrupt'}`;
     q('.start').hidden=!network||state.status!=='waiting'||networkWaiting;
     q('.retry').hidden=network&&state.status!=='failed'&&state.status!=='complete';
     if(network && (networkWaiting||state.status==='waiting'))q('.objective').textContent=networkWaiting?'CO-OP: WAITING FOR SECOND PLAYER — safe exploration available; share your room code':'SQUAD READY — press START CO-OP MISSION or Enter';
@@ -225,6 +297,8 @@ export function createCampaign({
       );
     ctx.fillStyle = "#84efb6";
     for(const s of m.steps.slice(state.step||0))ctx.fillRect(px(s.position[0])-3,pz(s.position[1])-3,6,6);
+    const activePoint=state.intel?m.extract:m.steps[state.step||0].position;
+    ctx.strokeStyle='#e8d38d';ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(px(player.position.x),pz(player.position.z));ctx.lineTo(px(activePoint[0]),pz(activePoint[1]));ctx.stroke();ctx.setLineDash([]);
     ctx.strokeStyle = "#57d7ff";
     ctx.beginPath();
     ctx.arc(px(m.extract[0]), pz(m.extract[1]), 5, 0, Math.PI * 2);
@@ -255,8 +329,10 @@ export function createCampaign({
     ctx.fillStyle = "#acbdba";
     ctx.font = "10px monospace";
     const point = state.intel ? m.extract : m.steps[state.step||0].position;
+    const bearing=(Math.atan2(point[0]-player.position.x,-(point[1]-player.position.z))*180/Math.PI+360)%360;
+    const direction=['N','NE','E','SE','S','SW','W','NW'][Math.round(bearing/45)%8];
     ctx.fillText(
-      `${state.intel ? "EXTRACTION" : "TERMINAL"} ${Math.round(Math.hypot(player.position.x - point[0], player.position.z - point[1]))}m | N ↑`,
+      `${state.intel ? "EXTRACTION" : m.steps[state.step||0].kind.toUpperCase()} ${Math.round(Math.hypot(player.position.x - point[0], player.position.z - point[1]))}m ${direction} ${Math.round(bearing)}° | N ↑`,
       8,
       142,
     );
@@ -278,8 +354,8 @@ export function createCampaign({
     time += dt;
     smokeClouds=smokeClouds.filter(c=>c.expires>Date.now());
     if(task){const m=MISSIONS[state.index],point=m.steps[state.step||0].position;
-      const safe=Math.hypot(player.position.x-point[0],player.position.z-point[1])<=2.4 && !enemies.some(e=>e.hp>0&&e.model.position.distanceTo(player.position)<12);
-      if(!safe){task=null;message('ACTION INTERRUPTED — return to terminal and clear nearby threats');}
+      const safe=objectiveSafe(m.steps[state.step||0],player.position,enemies.filter(e=>e.hp>0&&e.model.position.distanceTo(player.position)<12).length);
+      if(!safe){task=null;message('ACTION INTERRUPTED — return to the marked equipment; clear threats for non-defense tasks');}
       else {task.remaining-=dt;if(task.remaining<=0){task=null;completeInteraction();}}
     }
     const boxes = obstacles.map((o) => [o.x, o.z, o.w, o.h, o.d]);
@@ -289,9 +365,11 @@ export function createCampaign({
         target = player.position.clone().add(new THREE.Vector3(0, 1.7, 0));
       const distance = eye.distanceTo(target),
         visible = distance < 23 && lineClear(eye, target);
+      const defense=task&&MISSIONS[state.index].steps[state.step||0]?.kind==='defend';
+      const rally=defense&&e.model.position.distanceTo(player.position)<60;
       const dest = visible
         ? player.position
-        : e.alertUntil>time ? e.lastKnown : e.home
+        : rally?player.position:e.alertUntil>time ? e.lastKnown : e.home
             .clone()
             .add(
               new THREE.Vector3(
@@ -305,7 +383,7 @@ export function createCampaign({
       const moving = dir.length() > (visible ? 6 : 0.3);
       if (moving) {
         dir.normalize();
-        const speed = (visible ? 2.2 : 1) * dt,
+        const speed = (visible||rally ? 2.2 : 1) * dt,
           nx = e.model.position.x + dir.x * speed,
           nz = e.model.position.z + dir.z * speed;
         if (!blocked(nx, e.model.position.z, boxes)) e.model.position.x = nx;
@@ -379,7 +457,8 @@ export function createCampaign({
     if(network){networkAction('interact');return;}
     if(state.status!=='active'||task)return;
     const m=MISSIONS[state.index],point=m.steps[state.step||0]?.position||m.extract;
-    if(Math.hypot(player.position.x-point[0],player.position.z-point[1])>2.4 || enemies.some(e=>e.hp>0&&e.model.position.distanceTo(player.position)<12)){message('Clear guards within 12m, then press E within 2.4m of the marked objective.');return;}
+    const threats=enemies.filter(e=>e.hp>0&&e.model.position.distanceTo(player.position)<12).length;
+    if(state.intel ? Math.hypot(player.position.x-point[0],player.position.z-point[1])>2.4||threats>0 : !objectiveSafe(m.steps[state.step||0],player.position,threats,true)){message('Press E within 2.4m of the marked equipment. Clear nearby guards for collection, switches, charges and downloads.');return;}
     if(state.intel){completeInteraction();return;}
     task={remaining:m.steps[state.step||0].duration};paint();
   }
@@ -395,8 +474,8 @@ export function createCampaign({
       if(!network)return;
       const previous=state.step;state={index:snapshot.index,status:snapshot.status,step:snapshot.step,intel:snapshot.intel};networkWaiting=snapshot.waiting;task=snapshot.task;transitionRemaining=snapshot.transitionRemaining??null;
       for(const data of snapshot.guards){const e=enemies[data.id];if(!e)continue;e.networkMoving=Math.hypot(e.model.position.x-data.x,e.model.position.z-data.z)>.01;const killed=e.hp>0&&data.hp<=0;e.hp=data.hp;if(killed){e.deathAge=0;blood(new THREE.Vector3(data.x,1.1,data.z));}e.model.position.x=data.x;e.model.position.z=data.z;e.model.rotation.y=data.rotation;if(e.hp>0){e.model.position.y=0;e.model.rotation.x=0;}}
-      if(previous!==state.step)playObjective();
-      paint();
+      if(networkSynced&&previous!==state.step)playObjective();
+      paint();networkSynced=true;
       if(state.status==='failed'){panel.hidden=true;failure.hidden=false;document.exitPointerLock?.();}
       else {panel.hidden=false;failure.hidden=true;}
       if(state.status==='complete'&&transitionRemaining===null)document.exitPointerLock?.();

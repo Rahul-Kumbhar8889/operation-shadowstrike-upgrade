@@ -20,6 +20,28 @@ MISSIONS.push({name:'04 / IRON HORIZON',brief:'Penetrate the airfield perimeter,
  actions:['BREACH PERIMETER CONTROL','DISABLE AIRFIELD RADAR','CUT RUNWAY POWER','RECOVER FLIGHT RECORDS','SABOTAGE FUEL PUMPS','DOWNLOAD COMMAND INTELLIGENCE','UNLOCK EXTRACTION CORRIDOR'],
  guards:[[-120,100],[-114,107],[-70,45],[-64,52],[15,85],[21,92],[95,35],[101,42],[65,-45],[71,-38],[-20,-85],[-14,-78],[-110,-110],[-104,-103],[40,5],[-45,-20],[110,-115],[125,-120],[118,-132],[100,-125]],damage:GUARD_BULLET_DAMAGE});
 for(const m of MISSIONS){m.steps=m.sites.map(([x,z],i)=>({position:[x,z-2],action:m.actions[i],duration:i%3===1?10:i%3===2?6:3}));m.objective=m.steps[0].position;m.action=m.actions[0];}
+// Objective mechanics are shared by solo and the authoritative co-op server.
+const operationPlans = [
+ [['switch','ISOLATE CCTV','Cut the security feed before entering the freight offices.'],['recover','SEIZE DISPATCH CODES','Recover the dispatch case from the office.'],['defend','HOLD FREIGHT CHECKPOINT','Start the override, then defend the checkpoint for 25 seconds.'],['plant','RIG FUEL CONTROL','Attach a demolition charge to the fuel controller.'],['recover','RECOVER TRANSPORT MANIFEST','Collect the transport dossier.'],['defend','TRANSMIT FIELD EVIDENCE','Hold the relay area while headquarters receives the evidence.']],
+ [['recover','ACQUIRE SECURITY KEYCARD','Take the access card from the security office.'],['switch','CUT GENERATOR POWER','Isolate the generator breaker.'],['plant','DESTROY UPLINK CONTROL','Fit a charge to the satellite control cabinet.'],['download','DOWNLOAD ENCRYPTION DATA','Remain at the server while the encrypted archive downloads.'],['switch','SHUT DOWN RADAR','Cut the radar tracking circuit.'],['defend','HOLD EMERGENCY RELAY','Protect the relay during the final transmission.']],
+ [['recover','RECOVER ACCESS CODES','Collect the command access case.'],['switch','DISABLE BASE ALARM','Disconnect the alarm circuit.'],['download','COPY DETENTION RECORDS','Download the detention records at the server rack.'],['defend','SECURE HANGAR OVERRIDE','Defend the hangar controls until the route opens.'],['plant','DEMOLISH COMMAND ARCHIVE','Place a charge on the archive controller.'],['recover','RECOVER EVACUATION DOSSIER','Take the evacuation dossier before extraction.']],
+ [['switch','BREACH PERIMETER CONTROL','Open the airfield security circuit.'],['plant','SABOTAGE AIRFIELD RADAR','Attach a charge to the radar controller.'],['switch','CUT RUNWAY POWER','Isolate the runway lighting breaker.'],['recover','RECOVER FLIGHT RECORDS','Take the flight recorder case.'],['plant','SABOTAGE FUEL PUMPS','Rig the fuel pump control panel.'],['download','DOWNLOAD COMMAND INTELLIGENCE','Stay at the server to copy the command archive.'],['defend','HOLD EXTRACTION CORRIDOR','Defend the corridor override until extraction is cleared.']]
+];
+for (let index=0; index<MISSIONS.length; index++) {
+ const m=MISSIONS[index];
+ m.steps=m.steps.map((step,i)=>{const [kind,action,hint]=operationPlans[index][i];return {...step,kind,action,hint,duration:({recover:1,switch:3,plant:7,download:14,defend:25})[kind],radius:kind==='defend'?14:2.4};});
+ m.actions=m.steps.map(step=>step.action);m.action=m.actions[0];
+}
+export function objectiveSafe(step,position,livingGuards=0,starting=false){
+ if(!step)return false;
+ const radius=starting?2.4:step.radius;
+ return Math.hypot(position.x-step.position[0],position.z-step.position[1])<=radius&&(step.kind==='defend'||livingGuards===0);
+}
+// Solid landmarks give each operation a distinct combat lane and cover layout.
+MISSIONS[0].landmarks=[-80,-59,-38].map(x=>({kind:'wagon',x,z:-125,w:17,h:3.4,d:3.8}));
+MISSIONS[1].landmarks=[{kind:'antenna',x:118,z:112,w:5,h:5,d:5}];
+MISSIONS[2].landmarks=[{kind:'truck',x:90,z:85,w:3,h:3,d:7},{kind:'truck',x:96,z:85,w:3,h:3,d:7}];
+MISSIONS[3].landmarks=[{kind:'aircraft',x:24,z:0,w:4,h:4,d:24}];
 export function missionWalls([x, z]) {
   // South entrance is two metres wide; every wall has identical collision/render geometry.
   return [
@@ -41,7 +63,7 @@ export function interactMission(state, position, livingGuards) {
  if(state.status!=='active')return state;
  const m=MISSIONS[state.index],step=state.step||0;
  const point=step<m.steps.length?m.steps[step].position:m.extract;
- if(Math.hypot(position.x-point[0],position.z-point[1])>2.4||livingGuards>0)return state;
+ if(step<m.steps.length ? !objectiveSafe(m.steps[step],position,livingGuards) : Math.hypot(position.x-point[0],position.z-point[1])>2.4||livingGuards>0)return state;
  if(step<m.steps.length)return {...state,step:step+1,intel:step+1===m.steps.length};
  return {...state,status:'complete'};
 }
@@ -49,6 +71,7 @@ export function interactMission(state, position, livingGuards) {
 // Shared physical layout for cooperative movement, sight and weapon validation.
 export function campaignObstacles(m){
  const boxes=m.sites.flatMap(missionWalls);
+ for(const p of m.landmarks)boxes.push([p.x,p.z,p.w,p.h,p.d]);
  for(let n=0;n<6;n++)boxes.push([-5,55-n*22,5,3,12]);
  for(let n=0;n<5;n++)boxes.push([45+n*4,-5,2.8,3.2,2.8]);
  boxes.push([-45,110,5,6,5]);return boxes;
