@@ -45,3 +45,11 @@ export function interactMission(state, position, livingGuards) {
  if(step<m.steps.length)return {...state,step:step+1,intel:step+1===m.steps.length};
  return {...state,status:'complete'};
 }
+
+// Shared physical layout for cooperative movement, sight and weapon validation.
+export function campaignObstacles(m){
+ const boxes=m.sites.flatMap(missionWalls);
+ for(let n=0;n<6;n++)boxes.push([-5,55-n*22,5,3,12]);
+ for(let n=0;n<5;n++)boxes.push([45+n*4,-5,2.8,3.2,2.8]);
+ boxes.push([-45,110,5,6,5]);return boxes;
+}

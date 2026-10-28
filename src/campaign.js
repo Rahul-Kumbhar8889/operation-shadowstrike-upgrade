@@ -1,3 +1,4 @@
+import {addGuardDetail} from './guardDetail.js';
 import { blastDamage, smokeBlocks } from '../shared/equipment.js';
 import { playGunshot, playObjective } from './combatEffects.js';
 import * as THREE from "three";
@@ -18,7 +19,7 @@ export function createCampaign({
   message,
   tracer,
 }) {
-  const textures=createEnvironmentTextures();textures.ground.dispose();textures.ground=createTerrainTexture();
+  const textures=createEnvironmentTextures();textures.ground.dispose();textures.ground=createTerrainTexture();textures.ground.repeat.set(15,15);
   const baseColliders=[...obstacles];
   const baseWorld=scene.children.filter(o=>!o.isLight && o!==player);
   const group = new THREE.Group();
@@ -29,13 +30,13 @@ export function createCampaign({
     colliders = [],
     time = 0,
     exit = () => {},
-    beacon, task=null, smokeClouds=[];
+    beacon, task=null, smokeClouds=[],network=false,networkWaiting=false,networkAction=()=>{};
   const ray = new THREE.Raycaster(),
     panel = document.createElement("section");
   panel.id = "missionPanel";
   panel.hidden = true;
   panel.innerHTML =
-    '<small>SHADOWSTRIKE / FIELD OPERATIONS</small><h2></h2><p class="brief"></p><p class="objective"></p><canvas class="radar" width="280" height="150" aria-label="Tactical map: blue player, red guards, green terminal, cyan extraction"></canvas><p>E interact • V camera • Esc release cursor</p><button class="next" hidden>NEXT OPERATION</button><button class="retry">RESTART MISSION</button><button class="exit">RETURN TO MENU</button>';
+    '<small>SHADOWSTRIKE / FIELD OPERATIONS</small><h2></h2><p class="brief"></p><p class="objective"></p><canvas class="radar" width="280" height="150" aria-label="Tactical map: blue player, red guards, green terminal, cyan extraction"></canvas><p>E interact • V camera • Esc release cursor</p><button class="start" hidden>START CO-OP MISSION</button><button class="next" hidden>NEXT OPERATION</button><button class="retry">RESTART MISSION</button><button class="exit">RETURN TO MENU</button>';
   document.body.append(panel);
   const failure = document.createElement("section");
   failure.id = "missionFailure";
@@ -45,11 +46,12 @@ export function createCampaign({
   failure.setAttribute("aria-labelledby", "missionFailureTitle");
   failure.innerHTML = '<div class="failure-card"><h1 id="missionFailureTitle">MISSION FAILED</h1><p>Your health reached zero. Regroup and try again.</p><button class="restart">RESTART MISSION</button><button class="menu">BACK TO MAIN MENU</button></div>';
   document.body.append(failure);
-  failure.querySelector(".restart").onclick = () => start(state.index);
+  failure.querySelector(".restart").onclick = () => network?networkAction('restart'):start(state.index);
   failure.querySelector(".menu").onclick = () => exit();
   const q = (s) => panel.querySelector(s);
-  q(".retry").onclick = () => start(state.index);
-  q(".next").onclick = () => start((state.index + 1) % MISSIONS.length);
+  q(".retry").onclick = () => network?networkAction('restart'):start(state.index);
+  q(".start").onclick=()=>networkAction('start');
+  q(".next").onclick = () => network?networkAction('next'):start((state.index + 1) % MISSIONS.length);
   q(".exit").onclick = () => exit();
   function mesh(geo, color, x, y, z) {
     const o = new THREE.Mesh(
@@ -79,7 +81,8 @@ export function createCampaign({
     ms.forEach((m) => {if(m.map?.isCanvasTexture && !Object.values(textures).includes(m.map))m.map.dispose();m.dispose();});
     group.clear();
   }
-  function start(index = 0) {
+  function start(index = 0,options={}) {
+    network=!!options.network;networkWaiting=network;
     cleanup();
     obstacles.length=0;
     for(const o of baseWorld)o.visible=false;
@@ -89,10 +92,10 @@ export function createCampaign({
     group.visible = true;
     panel.hidden = false;
     const m = MISSIONS[index];
-    const floor=mesh(new THREE.PlaneGeometry(330,330),index===1?0x5a655a:0x8a8061,0,-.02,0);floor.rotation.x=-Math.PI/2;floor.material.map=textures.ground;floor.material.bumpMap=textures.ground;floor.material.bumpScale=.04;floor.material.color.set(0xffffff);
+    const floor=mesh(new THREE.PlaneGeometry(500,500),index===1?0x5a655a:0x8a8061,0,-.02,0);floor.rotation.x=-Math.PI/2;floor.material.map=textures.ground;floor.material.bumpMap=textures.ground;floor.material.bumpScale=.04;floor.material.color.set(0xffffff);
     const treeGeometry=new THREE.ConeGeometry(2.7,9,7),treeMaterial=new THREE.MeshStandardMaterial({color:0x42533c});
     const trees=new THREE.InstancedMesh(treeGeometry,treeMaterial,100),dummy=new THREE.Object3D();
-    for(let n=0;n<100;n++){const angle=n/100*Math.PI*2,r=166+(n%7)*2;dummy.position.set(Math.cos(angle)*r,4.5,Math.sin(angle)*r);dummy.scale.setScalar(1+(n%4)*.18);dummy.updateMatrix();trees.setMatrixAt(n,dummy.matrix);}group.add(trees);
+    for(let n=0;n<100;n++){const angle=n/100*Math.PI*2,r=175+(n%7)*2,edge=Math.max(Math.abs(Math.cos(angle)),Math.abs(Math.sin(angle)));dummy.position.set(Math.cos(angle)/edge*r,4.5,Math.sin(angle)/edge*r);dummy.scale.setScalar(1+(n%4)*.18);dummy.updateMatrix();trees.setMatrixAt(n,dummy.matrix);}group.add(trees);
     for(let n=0;n<m.sites.length-1;n++){
       const [ax,az]=m.sites[n],[bx,bz]=m.sites[n+1],length=Math.hypot(bx-ax,bz-az);
       const road=mesh(new THREE.PlaneGeometry(5,length),0x727366,(ax+bx)/2,.005,(az+bz)/2);road.rotation.x=-Math.PI/2;road.rotation.z=-Math.atan2(bx-ax,bz-az);
@@ -145,7 +148,7 @@ export function createCampaign({
     // Perimeter terrain, checkpoint towers, fuel stores and an airfield landmark.
     const mountainGeo=new THREE.SphereGeometry(28,20,12,0,Math.PI*2,0,Math.PI/2),mountainMat=new THREE.MeshStandardMaterial({color:0x687263,roughness:1});
     const mountains=new THREE.InstancedMesh(mountainGeo,mountainMat,26);
-    for(let n=0;n<26;n++){const a=n/26*Math.PI*2;dummy.position.set(Math.cos(a)*205,-.5,Math.sin(a)*205);dummy.scale.set(1+(n%3)*.4,1+(n%4)*.2,1);dummy.updateMatrix();mountains.setMatrixAt(n,dummy.matrix);}group.add(mountains);
+    for(let n=0;n<26;n++){const a=n/26*Math.PI*2,edge=Math.max(Math.abs(Math.cos(a)),Math.abs(Math.sin(a)));dummy.position.set(Math.cos(a)/edge*215,-.5,Math.sin(a)/edge*215);dummy.scale.set(1+(n%3)*.4,1+(n%4)*.2,1);dummy.updateMatrix();mountains.setMatrixAt(n,dummy.matrix);}group.add(mountains);
     for(const [x,z] of [[-145,145],[145,145],[-145,-145],[145,-145]]){
       for(const dx of [-2,2])for(const dz of [-2,2])mesh(new THREE.CylinderGeometry(.13,.17,9,6),0x454e44,x+dx,4.5,z+dz);
       mesh(new THREE.BoxGeometry(5,.3,5),0x3d493c,x,8,z);mesh(new THREE.BoxGeometry(5.4,.2,5.4),0x3d493c,x,11,z);
@@ -177,6 +180,7 @@ export function createCampaign({
       group.add(model);
       return {
         model,
+        detail:addGuardDetail(model),
         hp: 100,
         home: model.position.clone(),
         phase: i * 2,
@@ -195,6 +199,9 @@ export function createCampaign({
     const step=state.step||0, current=m.steps[step];
     q('.objective').textContent=state.status==='failed'?'MISSION FAILED':state.status==='complete'?'OPERATION COMPLETE':current?`OBJECTIVE ${step+1}/${m.steps.length}: ${current.action} • E near terminal • ${left} guards alive`:'REACH EXTRACTION • Clear nearby guards and press E';
     if(task && state.status==='active')q('.objective').textContent=`${current.action} • ${Math.ceil(task.remaining)}s • Stay within 2.4m; nearby threats interrupt`;
+    q('.start').hidden=!network||state.status!=='waiting'||networkWaiting;
+    q('.retry').hidden=network&&state.status!=='failed'&&state.status!=='complete';
+    if(network && (networkWaiting||state.status==='waiting'))q('.objective').textContent=networkWaiting?'CO-OP: WAITING FOR SECOND PLAYER — share your room code':'SQUAD READY — press START CO-OP MISSION';
     q(".next").hidden = state.status !== "complete";
     q(".next").textContent =
       state.index === MISSIONS.length-1 ? "REPLAY CAMPAIGN" : "NEXT OPERATION";
@@ -261,6 +268,8 @@ export function createCampaign({
     ).length;
   }
   function update(dt, running) {
+    for(const e of enemies)e.detail(e.model.position.distanceTo(player.position));
+    if(network){for(const e of enemies)if(e.hp>0)e.model.userData.updateAnimation?.(dt,!!e.networkMoving,false);return;}
     if (state.status !== "active" || !running) return;
     time += dt;
     smokeClouds=smokeClouds.filter(c=>c.expires>Date.now());
@@ -362,6 +371,7 @@ export function createCampaign({
     paint();
   }
   function interact(){
+    if(network){networkAction('interact');return;}
     if(state.status!=='active'||task)return;
     const m=MISSIONS[state.index],point=m.steps[state.step||0]?.position||m.extract;
     if(Math.hypot(player.position.x-point[0],player.position.z-point[1])>2.4 || enemies.some(e=>e.hp>0&&e.model.position.distanceTo(player.position)<12)){message('Clear guards within 12m, then press E within 2.4m of the marked objective.');return;}
@@ -375,6 +385,17 @@ export function createCampaign({
   }
   return {
     start,
+    setNetworkAction(fn){networkAction=fn;},
+    sync(snapshot){
+      if(!network)return;
+      const previous=state.step;state={index:snapshot.index,status:snapshot.status,step:snapshot.step,intel:snapshot.intel};networkWaiting=snapshot.waiting;task=snapshot.task;
+      for(const data of snapshot.guards){const e=enemies[data.id];if(!e)continue;e.networkMoving=Math.hypot(e.model.position.x-data.x,e.model.position.z-data.z)>.01;e.hp=data.hp;e.model.position.set(data.x,e.hp>0?0:.25,data.z);e.model.rotation.set(e.hp>0?0:-Math.PI/2,data.rotation,0);}
+      if(previous!==state.step)playObjective();
+      paint();
+      if(state.status==='failed'){panel.hidden=true;failure.hidden=false;document.exitPointerLock?.();}
+      else {panel.hidden=false;failure.hidden=true;}
+      if(state.status==='complete')document.exitPointerLock?.();
+    },
     blast,
     onShot(origin,noise){for(const e of enemies)if(e.hp>0&&e.model.position.distanceTo(origin)<noise){e.lastKnown=origin.clone();e.alertUntil=time+8;}},
     smoke(position){smokeClouds.push({...position,expires:Date.now()+16000});},
@@ -387,7 +408,7 @@ export function createCampaign({
       return state.status !== "inactive";
     },
     get running() {
-      return state.status === "active";
+      return state.status === "active" && (!network||!networkWaiting);
     },
     fail() {
       state.status = "failed";
@@ -398,7 +419,7 @@ export function createCampaign({
       document.exitPointerLock?.();
     },
     stop() {
-      cleanup();
+      cleanup();network=false;networkWaiting=false;
       state.status = "inactive";
       panel.hidden = true;
       failure.hidden = true;

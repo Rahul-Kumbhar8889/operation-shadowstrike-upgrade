@@ -1,3 +1,5 @@
+import {createCoop,coopSnapshot,coopSpawn,canCoopAct,updateCoop,interactCoop,hurtGuard,coopBlast} from './coop.js';
+import {MISSIONS,blocked,CAMPAIGN_MAX_HP} from '../shared/campaign.js';
 import {EQUIPMENT,createEquipment,throwLanding,blastDamage,healHealth} from '../shared/equipment.js';
 import { WEAPONS, createAmmo, shotDirections } from '../shared/weapons.js';
 import { createServer } from 'node:http';
@@ -45,6 +47,8 @@ const httpServer = createServer(async (req, res) => {
 });
 
 const io = new Server(httpServer, {
+  // Allow heavy first-frame shader compilation without dropping a joined player.
+  pingInterval:15000,pingTimeout:90000,
   cors: {
     origin(origin, callback) { callback(null, originAllowed(origin)); },
     methods: ['GET', 'POST'],
@@ -63,7 +67,7 @@ const rooms = new Map();
 const MAX_HP = 100;
 const SCORE_LIMIT = 5;
 const RESPAWN_MS = 3000;
-const MAX_DISTANCE = 80;
+const MAX_DISTANCE = 160;
 
 const DEFAULT_WEAPON = 'assault';
 
@@ -137,6 +141,7 @@ function roundState(room) {
   return { winner: room.winner || null, scoreLimit: SCORE_LIMIT, ready: [...(room.ready || [])] };
 }
 function sendState(code, room) {
+  if(room.coop)io.to(code).emit('coop-state',coopSnapshot(room));
   io.to(code).emit('round-state', roundState(room));
   io.to(code).emit('game-state', allPlayers(room));
 }
@@ -316,13 +321,13 @@ function addPlayer(socket, room, code) {
   const used = new Set([...room.players.values()].map((player) => player.slot));
 
   const slot = used.has(0) ? 1 : 0;
-  const spawn = spawnFor(slot);
+  const spawn = room.coop?coopSpawn(room.coop,slot):spawnFor(slot);
 
   const player = {
     slot,
     position: { ...spawn },
     rotation: 0,
-    hp: MAX_HP,
+    hp: room.coop?CAMPAIGN_MAX_HP:MAX_HP,
     kills: 0,
     deaths: 0,
     alive: true,
@@ -356,6 +361,8 @@ function roomResponse(socket, room, code, spawn) {
     players: allPlayers(room),
     targets: allTargets(room),
     weapons: WEAPONS,
+    mode:room.coop?'coop':'pvp',
+    coop:room.coop?coopSnapshot(room):null,
     round: roundState(room),
     equipment:{...room.players.get(socket.id).equipment},
     smokes:(room.smokes||[]).filter(c=>c.expires>Date.now()),
@@ -448,6 +455,21 @@ io.on('connection', (socket) => {
   // CREATE ROOM
   // ==============================================
 
+  socket.on('create-coop',(index,callback)=>{
+    if(typeof callback!=='function')return;
+    if(!Number.isInteger(index)||!MISSIONS[index])return callback({ok:false,error:'Choose a valid mission.'});
+    leaveRoom(socket);const code=makeCode();const room={players:new Map(),targets:new Map(),winner:null,generation:0,smokes:[],ready:new Set(),coop:createCoop(index)};
+    rooms.set(code,room);const spawn=addPlayer(socket,room,code);callback(roomResponse(socket,room,code,spawn));sendWeaponState(socket,room.players.get(socket.id));sendState(code,room);
+  });
+  socket.on('coop-start',()=>{const code=socket.data.roomCode,room=rooms.get(code);if(room?.coop?.status!=='waiting'||room.players.size!==2)return;room.coop.status='active';sendState(code,room);});
+  socket.on('coop-interact',()=>{const code=socket.data.roomCode,room=rooms.get(code);if(room?.coop){interactCoop(room,socket.id);sendState(code,room);}});
+  socket.on('coop-restart',(next=false)=>{
+    const code=socket.data.roomCode,room=rooms.get(code);if(!room?.coop||!['failed','complete'].includes(room.coop.status))return;
+    const index=next&&room.coop.status==='complete'?(room.coop.index+1)%MISSIONS.length:room.coop.index;
+    room.coop=createCoop(index);room.generation++;room.smokes=[];
+    for(const [id,p] of room.players){cancelReload(p);Object.assign(p,{position:coopSpawn(room.coop,p.slot),hp:CAMPAIGN_MAX_HP,alive:true,kills:0,deaths:0,ammo:createAmmo(),equipment:createEquipment(),weapon:DEFAULT_WEAPON,lastShot:0,lastEquipment:0,lastMove:Date.now()});const client=io.sockets.sockets.get(id);if(client)sendWeaponState(client,p);}
+    io.to(code).emit('coop-reset',{coop:coopSnapshot(room),players:allPlayers(room)});sendState(code,room);
+  });
   socket.on('create-room', (callback) => {
     if (typeof callback !== 'function') {
       return;
@@ -554,11 +576,11 @@ io.on('connection', (socket) => {
 
     const { x, z } = data.position;
 
-    if (Math.abs(x) > 45 || Math.abs(z) > 45) {
+    if (Math.abs(x) > (room.coop?155:45) || Math.abs(z) > (room.coop?155:45)) {
       return;
     }
 
-    if (collides(x, z)) return;
+    if(room.coop){if(!canCoopAct(room)||blocked(x,z,room.coop.boxes))return;}else if (collides(x, z)) return;
 
     const now = Date.now();
 
@@ -638,7 +660,7 @@ io.on('connection', (socket) => {
 
   socket.on('request-rematch', () => {
     const code=socket.data.roomCode, room=rooms.get(code);
-    if(!room?.winner || !room.players.has(socket.id))return;
+    if(room?.coop || !room?.winner || !room.players.has(socket.id))return;
     room.ready.add(socket.id);
     if(room.players.size===2 && [...room.players.keys()].every(id=>room.ready.has(id))) {
       room.generation++;room.smokes=[];room.winner=null;room.ready.clear();room.targets=createTargets();
@@ -657,14 +679,14 @@ io.on('connection', (socket) => {
   socket.on('use-equipment',(data,ack=()=>{})=>{
     if(typeof ack!=='function')return;
     const code=socket.data.roomCode,room=rooms.get(code),player=room?.players.get(socket.id),type=data?.type;
-    if(!player?.alive || room.winner || !Object.hasOwn(EQUIPMENT,type) || player.equipment[type]<=0 || Date.now()-player.lastEquipment<900)return ack({ok:false});
+    if(!player?.alive || !canCoopAct(room) || room.winner || !Object.hasOwn(EQUIPMENT,type) || player.equipment[type]<=0 || Date.now()-player.lastEquipment<900)return ack({ok:false});
     if(type==='injection'){
-      if(player.hp>=MAX_HP)return ack({ok:false});
-      player.equipment[type]--;player.lastEquipment=Date.now();player.hp=healHealth(player.hp,MAX_HP,true);
+      if(player.hp>=(room.coop?CAMPAIGN_MAX_HP:MAX_HP))return ack({ok:false});
+      player.equipment[type]--;player.lastEquipment=Date.now();player.hp=healHealth(player.hp,room.coop?CAMPAIGN_MAX_HP:MAX_HP,!room.coop);
       sendWeaponState(socket,player);io.to(code).emit('equipment-healed',{id:socket.id,hp:player.hp});sendState(code,room);return ack({ok:true});
     }
     if(!validVector(data.direction) || Math.abs(Math.hypot(data.direction.x,data.direction.y,data.direction.z)-1)>.01)return ack({ok:false});
-    const landing=throwLanding(player.position,data.direction,obstacles,45),definition=EQUIPMENT[type],generation=room.generation;
+    const landing=throwLanding(player.position,data.direction,room.coop?room.coop.boxes:obstacles,room.coop?155:45),definition=EQUIPMENT[type],generation=room.generation;
     player.equipment[type]--;player.lastEquipment=Date.now();sendWeaponState(socket,player);
     io.to(code).emit('equipment-thrown',{type,origin:{...player.position},landing,fuse:definition.fuse});ack({ok:true});
     setTimeout(()=>{
@@ -674,6 +696,7 @@ io.on('connection', (socket) => {
         io.to(code).emit('equipment-resolved',{type,position:landing,duration:definition.duration,expires:cloud.expires});
       }else{
         io.to(code).emit('equipment-resolved',{type,position:landing});
+        if(room.coop){coopBlast(room,landing,socket.id,rayBoxDistance,(event,data)=>io.to(code).emit(event,data));sendState(code,room);return;}
         const blastOrigin={...landing,y:.9};
         for(const [id,opponent] of room.players){if(id===socket.id||!opponent.alive)continue;
           const distance=Math.hypot(opponent.position.x-landing.x,opponent.position.z-landing.z),damage=blastDamage(distance);
@@ -690,7 +713,7 @@ io.on('connection', (socket) => {
 
     const shooter = room?.players.get(socket.id);
 
-    if (!shooter || !shooter.alive || room.winner) {
+    if (!shooter || !shooter.alive || !canCoopAct(room) || room.winner) {
       return;
     }
 
@@ -734,7 +757,7 @@ io.on('connection', (socket) => {
     for (const [pellet,dir] of shotDirections(data.direction, weapon).entries()) {
     let wallDistance = weapon.range;
 
-    for (const box of obstacles) {
+    for (const box of (room.coop?room.coop.boxes:obstacles)) {
       wallDistance = Math.min(wallDistance, rayBoxDistance(origin, dir, box));
     }
 
@@ -743,7 +766,7 @@ io.on('connection', (socket) => {
 
     // Check opponent.
     for (const [id, player] of room.players) {
-      if (id === socket.id || !player.alive) {
+      if (room.coop || id === socket.id || !player.alive) {
         continue;
       }
 
@@ -760,6 +783,7 @@ io.on('connection', (socket) => {
       }
     }
 
+    if(room.coop)for(const guard of room.coop.guards){if(guard.hp<=0)continue;const distance=rayPlayerDistance(origin,dir,{position:{x:guard.x,z:guard.z}});if(distance<closestDistance){closestDistance=distance;closest={type:'guard',entity:guard};}}
     // Check shared targets.
     for (const target of room.targets.values()) {
       if (!target.alive) continue;
@@ -787,6 +811,7 @@ io.on('connection', (socket) => {
     });
 
     if (!closest) continue;
+    if(closest.type==='guard'){hurtGuard(room,closest.entity,weapon.damage,socket.id,(event,data)=>io.to(code).emit(event,data));sendState(code,room);continue;}
 
     // ============================================
     // TARGET DAMAGE
@@ -884,6 +909,9 @@ io.on('connection', (socket) => {
     console.log('Disconnected:', socket.id);
   });
 });
+
+// Fixed-rate server simulation: both clients receive identical guard/objective state.
+setInterval(()=>{for(const [code,room] of rooms){if(!room.coop)continue;updateCoop(room,.1,Date.now(),rayBoxDistance,(event,data)=>io.to(code).emit(event,data));room.coop.broadcastTick=(room.coop.broadcastTick||0)+1;if(room.coop.broadcastTick%2===0)io.to(code).emit('coop-state',coopSnapshot(room));if(room.coop.broadcastTick%10===0)io.to(code).emit('game-state',allPlayers(room));}},100).unref();
 
 httpServer.listen(port, '0.0.0.0', () => {
   console.log(`Multiplayer server running on port ${httpServer.address().port}`);

@@ -203,3 +203,19 @@ test('server owns grenade inventory, blast damage, injections and smoke replicat
   assert.equal((await hitAgain).hp,0,'grenade kills through smoke; smoke is concealment, not armor');
  }finally{a.disconnect();b.disconnect();}
 });
+
+test('two clients join a real co-op operation, share start/guards and cannot damage teammates',async()=>{
+ const a=await client('websocket'),b=await client('polling');try{
+  const room=await a.timeout(2000).emitWithAck('create-coop',3);assert.equal(room.mode,'coop');assert.equal(room.coop.index,3);assert.equal(room.targets.length,0);assert.equal(room.players[0].hp,1000);assert.equal(room.coop.status,'waiting');
+  const joined=await b.timeout(2000).emitWithAck('join-room',room.code);assert.equal(joined.coop.index,3);assert.equal(joined.coop.guards.length,20);assert.equal(joined.players.length,2);
+  const activeA=event(a,'coop-state',s=>s.status==='active'),activeB=event(b,'coop-state',s=>s.status==='active');a.emit('coop-start');const [sa,sb]=await Promise.all([activeA,activeB]);assert.equal(sa.index,sb.index);assert.equal(sa.guards.length,sb.guards.length);
+  const friendlyHits=[];b.on('player-hit',d=>{if(d.shooterId===a.id)friendlyHits.push(d);});const shot=event(b,'shot-fired',d=>d.shooterId===a.id);a.emit('shoot',{direction:{x:1,y:0,z:0}});await shot;await new Promise(r=>setTimeout(r,150));assert.equal(friendlyHits.length,0,'friendly fire off; AI may still hit a player');
+  const guardUpdates=await event(b,'coop-state',s=>s.guards.some((g,i)=>Math.abs(g.x-joined.coop.guards[i].x)>.001));assert.equal(guardUpdates.status,'active');
+  let latest=guardUpdates;b.on('coop-state',s=>latest=s);
+  const killedA=event(a,'coop-guard-hit',d=>d.id===1&&d.hp===0),killedB=event(b,'coop-guard-hit',d=>d.id===1&&d.hp===0);
+  for(let shot=0;shot<4;shot++){await new Promise(r=>setTimeout(r,230));const g=latest.guards[1],origin=room.spawn,dx=g.x-origin.x,dz=g.z-origin.z,n=Math.hypot(dx,dz);a.emit('shoot',{direction:{x:dx/n,y:0,z:dz/n}});}
+  assert.equal((await killedA).hp,0);assert.equal((await killedB).hp,0,'guard elimination is shared, not local-only');
+
+  const paused=event(a,'coop-state',s=>s.waiting);b.disconnect();assert.equal((await paused).waiting,true);
+ }finally{a.disconnect();b.disconnect();}
+});

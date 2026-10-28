@@ -37,6 +37,7 @@ let reloadToken = 0;
 let currentRoom = null;
 let lastRoomCode=null;
 let multiplayerActive = false;
+let coopMode=false;
 let connectionBusy = false;
 let lastNetworkUpdate = 0;
 
@@ -72,9 +73,11 @@ app.innerHTML = `
     <div class="lobby-card">
       <div class="eyebrow">TACTICAL OPERATIONS NETWORK</div>
       <h1>OPERATION<br>SHADOWSTRIKE</h1>
-      <p class="subtitle">MULTIPLAYER COMBAT</p>
+      <p class="subtitle">CO-OP MISSIONS + 1V1 ARENA</p>
 
-      <button id="createRoom">CREATE ROOM</button>
+      <select id="missionSelect" aria-label="Select story operation"><option value="0">01 / Railway Interdiction</option><option value="1">02 / Signal Blackout</option><option value="2">03 / Nightfall Extraction</option><option value="3">04 / Iron Horizon Airfield</option></select>
+      <button id="createCoop">CREATE CO-OP MISSION ROOM</button>
+      <button id="createRoom" class="secondary">CREATE 1V1 ARENA ROOM (OPTIONAL)</button>
 
       <div class="separator">OR JOIN YOUR SQUAD</div>
 
@@ -86,9 +89,9 @@ app.innerHTML = `
       />
 
       <button id="joinRoom">JOIN ROOM</button>
-      <select id="missionSelect" aria-label="Select story operation"><option value="0">01 / Railway Interdiction</option><option value="1">02 / Signal Blackout</option><option value="2">03 / Nightfall Extraction</option><option value="3">04 / Iron Horizon Airfield</option></select>
-      <button id="campaign">STORY OPERATIONS — 4 MISSIONS</button>
-      <p class="mode-rules">Story: clear guards, secure intel, extract alive.<br>Multiplayer: 1v1 combat, first to 5 kills wins; both players agree to rematch.<br>Desktop keyboard/mouse or phone touch controls.</p>
+
+      <button id="campaign">SOLO STORY — 4 MISSIONS</button>
+      <p class="mode-rules">Co-op: two players fight guards and complete shared missions. Select an operation, create a co-op room, share its code, then Start Mission.<br>Solo story: clear guards, secure intel, extract alive.<br>Multiplayer: 1v1 combat, first to 5 kills wins; both players agree to rematch.<br>Desktop keyboard/mouse or phone touch controls.</p>
       <button id="howToPlay" class="secondary">HOW TO PLAY</button>
       <button id="training" class="secondary">SOLO TRAINING</button>
 
@@ -380,6 +383,7 @@ const campaign = createCampaign({scene, obstacles, player:soldier, message:showM
   onReset(position) { alive=true;hp=CAMPAIGN_MAX_HP;soldier.rotation.set(0,0,0);for(const key in keys)keys[key]=false;resetPlayerWeapons();resetTargets([]);soldier.position.set(position.x,0,position.z);soldier.visible=true;firstPerson=true;yaw=0;pitch=0;updateHUD();updateMouseHint(); }
 });
 campaign.setExit(leaveGame);
+campaign.setNetworkAction(action=>socket.emit(action==='interact'?'coop-interact':action==='start'?'coop-start':'coop-restart',action==='next'));
 
 
 function weaponBox(parent, w, h, d, material, x, y, z) {
@@ -633,7 +637,7 @@ function updateHUD() {
     `HP: ${hp} | ` +
     `${WEAPONS[currentWeapon].short}: ` +
     `${ammo}/${WEAPONS[currentWeapon].magazine} | ` +
-    (campaign.active ? 'STORY OPERATION' : `${multiplayerActive?'DRILL GUARDS':'TRAINING GUARDS'}: ${targetKills}/5`);
+    (campaign.active ? (coopMode?'CO-OP OPERATION':'STORY OPERATION') : `${multiplayerActive?'DRILL GUARDS':'TRAINING GUARDS'}: ${targetKills}/5`);
 }
 
 function selectWeapon(id, notifyServer = true) {
@@ -843,14 +847,14 @@ const lobbyConnection = createLobbyConnection({
 const socket = lobbyConnection.socket;
 
 function updateScoreboard(players) {
-  $('#playerCount').textContent = `PLAYERS: ${players.length}/2${players.length<2?' — WAITING FOR OPPONENT':' — PVP LIVE'}`;
+  $('#playerCount').textContent = `PLAYERS: ${players.length}/2${players.length<2?(coopMode?' — WAITING FOR TEAMMATE':' — WAITING FOR OPPONENT'):(coopMode?' — CO-OP SQUAD':' — PVP LIVE')}`;
 
   $('#scoreRows').innerHTML = [...players]
     .sort((a, b) => b.kills - a.kills)
     .map(
       (player) => `
       <div class="score-row">
-        <span>${player.id === socket.id ? 'YOU' : 'OPPONENT'}</span>
+        <span>${player.id === socket.id ? 'YOU' : coopMode?'TEAMMATE':'OPPONENT'}</span>
         <span>K: ${player.kills}</span>
         <span>D: ${player.deaths}</span>
         <span>HP: ${player.hp}</span>
@@ -862,7 +866,7 @@ function updateScoreboard(players) {
 
   const self = players.find((p) => p.id === socket.id);
 
-  if (self) {
+  if (self && hp!==self.hp) {
     hp = self.hp;
     updateHUD();
   }
@@ -883,16 +887,17 @@ function enterRoom(response) {
   campaign.stop();firstPerson=false;soldier.rotation.set(0,0,0);
   currentRoom = response.code;lastRoomCode=response.code;
   updateRound(response.round);
-  multiplayerActive = true;
+  multiplayerActive = true;coopMode=response.mode==='coop';
 
   alive = true;
-  hp = 100;
+  hp = coopMode?CAMPAIGN_MAX_HP:100;
 
   resetPlayerWeapons();
   inventory=response.equipment||createEquipment();
   for(const c of response.smokes||[]){smokeClouds.push(c);equipmentFX.smoke(c,(c.expires-Date.now())/1000);}
   updateHUD();
 
+  if(coopMode){campaign.start(response.coop.index,{network:true});campaign.sync(response.coop);}
   soldier.position.set(response.spawn.x, 0, response.spawn.z);
 
   soldier.visible = true;
@@ -910,20 +915,20 @@ function enterRoom(response) {
 
   $('#roomLabel').textContent = `ROOM: ${currentRoom}`;
 
-  $('#networkStatus').textContent = `ONLINE | ROOM ${currentRoom}`;
+  $('#networkStatus').textContent = `${coopMode?'CO-OP MISSION':'1V1 ARENA'} | ROOM ${currentRoom}`;
 
   updateScoreboard(response.players || []);
   updateHUD();
   updateMouseHint();
 
-  showMessage('ROOM READY — Share the code. Stationary drill guards are practice targets; only opponent kills count toward victory.');
+  showMessage(coopMode?'CO-OP ROOM READY — share the code. Both players join, then press START CO-OP MISSION.':'1V1 ARENA — share the code. Drill guards are practice; only opponent kills count toward victory.');
 }
 
 async function requestRoom(eventName, code) {
   if (connectionBusy) return;
   connectionBusy = true;
   $('#createRoom').disabled = true;
-  $('#joinRoom').disabled = true;
+  $('#joinRoom').disabled = true;$('#createCoop').disabled=true;
   try {
     const response = await lobbyConnection.request(eventName, code);
     if (response) enterRoom(response);
@@ -932,10 +937,11 @@ async function requestRoom(eventName, code) {
   } finally {
     connectionBusy = false;
     $('#createRoom').disabled = false;
-    $('#joinRoom').disabled = false;
+    $('#joinRoom').disabled = false;$('#createCoop').disabled=false;
   }
 }
 
+$('#createCoop').onclick=()=>requestRoom('create-coop',Number($('#missionSelect').value));
 $('#createRoom').onclick = () => requestRoom('create-room');
 
 $('#joinRoom').onclick = () => {
@@ -982,7 +988,7 @@ $('#copyCode').onclick = async () => {
 function leaveGame() {
   campaign.stop();firstPerson=false;soldier.rotation.set(0,0,0);soldier.position.set(0,0,0);
   currentRoom = null;
-  multiplayerActive = false;
+  multiplayerActive = false;coopMode=false;
 
   lobbyConnection.cancel();
 
@@ -1019,6 +1025,7 @@ $('#leaveRoom').onclick = leaveGame;
 // ==============================================
 
 function updateRound(round) {
+  if(coopMode){$('#roundStatus').textContent='CO-OP • TEAM OBJECTIVES • FRIENDLY FIRE OFF';$('#rematch').classList.add('hidden');return;}
   if(round?.winner){equipmentFX.clear();smokeClouds=[];pendingThrows=[];}
   if(!round)return;
   $('#roundStatus').textContent=round.winner ? `${round.winner===socket.id?'VICTORY':'ROUND LOST'} • ${(round.ready||[]).length}/2 ready for rematch` : `FIRST TO ${round.scoreLimit} KILLS`;
@@ -1060,7 +1067,7 @@ socket.on('player-left', (id) => {
     remotePlayers.delete(id);
   }
 
-  showMessage('OPPONENT LEFT');
+  showMessage(coopMode?'TEAMMATE LEFT — mission paused until a second player joins.':'OPPONENT LEFT');
 });
 
 socket.on('game-state', (players) => {
@@ -1272,6 +1279,12 @@ socket.on('player-respawned', (data) => {
     }
   }
 });
+
+socket.on('coop-state',snapshot=>{if(!multiplayerActive||!coopMode)return;campaign.sync(snapshot);updateMouseHint();});
+socket.on('coop-guard-hit',data=>{if(!coopMode)return;if(data.shooterId===socket.id){showHitMarker();playHitConfirmation();}});
+socket.on('coop-guard-fired',data=>{if(!coopMode)return;const origin=new THREE.Vector3(data.origin.x,data.origin.y,data.origin.z),direction=new THREE.Vector3(data.target.x,data.target.y,data.target.z).sub(origin);bulletTracer(origin,direction.clone().normalize(),direction.length());if(origin.distanceTo(soldier.position)<35)playGunshot('assault',.25);});
+socket.on('coop-player-down',data=>{if(!coopMode)return;if(data.id===socket.id){alive=false;hp=0;firstPerson=false;reloading=false;reloadToken++;fireHeld=false;updateHUD();showMessage('YOU ARE DOWN — your teammate can finish. Restart is available if the squad fails.');}else{const remote=remotePlayers.get(data.id);if(remote)remote.alive=false;}});
+socket.on('coop-reset',data=>{if(!coopMode)return;campaign.start(data.coop.index,{network:true});campaign.sync(data.coop);const self=data.players.find(p=>p.id===socket.id);alive=true;hp=self.hp;soldier.position.set(self.position.x,0,self.position.z);resetPlayerWeapons();for(const p of data.players)addRemotePlayer(p);updateScoreboard(data.players);updateHUD();updateMouseHint();});
 
 socket.on('disconnect', (reason) => {
   if (!multiplayerActive) return;
@@ -1497,7 +1510,7 @@ const touchControls=createTouchControls({canvas:renderer.domElement,keys,
  camera:()=>{firstPerson=!firstPerson;},menu:leaveGame,
  active:()=>gameActive()&&alive&&(!campaign.active||campaign.running)&&!document.querySelector('#instructions')?.open});
 const instructions=document.createElement('dialog');instructions.id='instructions';
-instructions.innerHTML=`<h2>FIELD MANUAL</h2><p><strong>Multiplayer:</strong> create a room and share its six-character code. Your friend opens this same link and joins. First to five kills wins. Respawn takes three seconds; both players must agree to rematch.</p><p><strong>Story:</strong> choose one of four solo operations. Follow numbered objectives, clear guards within 12m, approach within 2.4m and use E. Stay near the terminal until its action finishes, then reach extraction.</p><p><strong>Desktop:</strong> WASD move, Shift sprint, mouse look, click fire, R reload, 1–9 weapons, G frag, B smoke, H heal, V view, M menu, Esc release mouse. Z scopes the sniper.</p><p><strong>Phone:</strong> landscape works best. Left joystick moves; drag the scene to look. Hold FIRE for automatic weapons. Buttons reload, switch guns, use equipment and interact.</p><p>Three healing injections per life: +350 story HP or +35 multiplayer HP, capped at maximum. Smoke conceals but does not stop bullets. Frag grenades hurt enemies; self damage is disabled.</p><button autofocus>CLOSE MANUAL</button>`;
+instructions.innerHTML=`<h2>FIELD MANUAL</h2><p><strong>Multiplayer:</strong> create a room and share its six-character code. Your friend opens this same link and joins. First to five kills wins. Respawn takes three seconds; both players must agree to rematch.</p><p><strong>Co-op:</strong> select an operation and Create Co-op Mission Room. Both players join by code, then Start Mission. Guard damage and objectives are shared by the server; teammates cannot hurt each other. Both living players must reach extraction. If both die, restart together.<br><strong>Story:</strong> choose one of four solo operations. Follow numbered objectives, clear guards within 12m, approach within 2.4m and use E. Stay near the terminal until its action finishes, then reach extraction.</p><p><strong>Desktop:</strong> WASD move, Shift sprint, mouse look, click fire, R reload, 1–9 weapons, G frag, B smoke, H heal, V view, M menu, Esc release mouse. Z scopes the sniper.</p><p><strong>Phone:</strong> landscape works best. Left joystick moves; drag the scene to look. Hold FIRE for automatic weapons. Buttons reload, switch guns, use equipment and interact.</p><p>Three healing injections per life: +350 story HP or +35 multiplayer HP, capped at maximum. Smoke conceals but does not stop bullets. Frag grenades hurt enemies; self damage is disabled.</p><button autofocus>CLOSE MANUAL</button>`;
 document.body.append(instructions);instructions.querySelector('button').onclick=()=>instructions.close();$('#howToPlay').onclick=()=>instructions.showModal();
 
 function gameActive() {
@@ -1593,11 +1606,15 @@ window.addEventListener('blur', () => {
 // ==============================================
 
 const clock = new THREE.Clock();
+let lobbyRendered=false,lastWaitingFrame=0;
 
 function animate() {
   const dt = Math.min(clock.getDelta(), 0.05);
 
   touchControls.update();
+  if(!gameActive()){fireHeld=false;if(!lobbyRendered){renderer.render(scene,camera);lobbyRendered=true;}return;}
+  lobbyRendered=false;
+  if(coopMode&&!campaign.running){const now=performance.now();if(now-lastWaitingFrame<200)return;lastWaitingFrame=now;}
   let moving = false;
   if(fireHeld && mouseLocked() && gameActive() && alive && WEAPONS[currentWeapon].automatic)shoot();
 

@@ -55,7 +55,7 @@ export function createLobbyConnection({ serverUrl, onStatus = () => {}, connectT
         clearTimeout(timer);
         socket.off('connect', connected);
         onStatus(eventName === 'join-room' ? 'Connected. Joining room…' : 'Connected. Creating room…');
-        const args = eventName === 'join-room' ? [code] : [];
+        const args = ['join-room','create-coop'].includes(eventName) ? [code] : [];
         socket.timeout(ackTimeout).emit(eventName, ...args, (error, response) => {
           if (error) return finish(new Error('The server did not acknowledge the room request. Retry; verify both players use the same running server.'));
           if (!response?.ok) return finish(new Error(response?.error || 'Unable to join room.'));

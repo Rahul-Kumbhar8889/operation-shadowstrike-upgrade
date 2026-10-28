@@ -84,3 +84,15 @@ Verification: `npm test`, `npm run build`, `node scripts/browser-smoke.mjs`, `no
 Touch devices now receive a movement joystick, drag-to-look and fire/reload/weapon/use/frag/smoke/heal/view/menu buttons. Landscape is recommended. Touch controls release movement and firing on blur or page hiding. A field manual explains both modes, scoring, equipment and keyboard/touch controls. On disconnection the previous room code is retained for an explicit Join retry; expired rooms are not restored automatically.
 
 `node scripts/mobile-smoke.mjs` verifies landscape touch firing, weapon switching, manual and menu. This is browser emulation; physical Android/iOS performance and multi-touch feel still require device playtesting.
+
+## Network cooperative operations
+
+The lobby now offers **CREATE CO-OP MISSION ROOM** separately from **CREATE 1V1 ARENA ROOM**. Select one of four operations before creating the room. A friend uses the same game URL and six-character code. With both players joined, press **START CO-OP MISSION**. Co-op rooms contain the full story map and soldier guards, not arena practice targets.
+
+The server owns guard positions/HP, patrol and line-of-sight fire, player HP, weapon ammo/damage, grenades, smoke, injections, ordered terminal action timers, extraction and failure. Friendly fire/self damage are off. Each operator starts at 1000 HP with the standard equipment inventory. Guard bullets deal 70 damage. A downed operator remains down until the mission resets; if both operators die, both receive the mission failure/restart screen. Any teammate can restart a failed/completed mission; next operation is available after completion. The new operation waits for Start again.
+
+Both living teammates must be within 4m of extraction; the operator interacting must be within 2.4m. If a teammate disconnects, simulation and action timers pause until the second slot is filled. Existing room-code reconnect guidance applies; expired empty rooms are not restored. A late joiner receives current guard/objective state. Co-op currently supports two players, not 8-player sessions or saved campaigns.
+
+`npm test` includes shared co-op simulation and two-client Socket.IO checks. `node scripts/coop-browser.mjs` exercises two isolated browser sessions joining the same operation, start synchronization and departure pause. Unit tests simulate combat and complete all four ordered objective chains; these are not full human playthroughs.
+
+Co-op rendering uses the detailed operator within 38m and a human-shaped low-detail silhouette farther away. Hit validation remains server-owned. Lobby rendering is idle after the first frame; a waiting co-op room renders at a reduced rate. A longer heartbeat timeout tolerates first-frame loading on slower devices. Browser smoke checks do not establish performance on physical phones or a complete human playthrough of each operation.
