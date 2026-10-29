@@ -462,7 +462,7 @@ io.on('connection', (socket) => {
   socket.on('voice-ready', data => {
     const code=socket.data.roomCode,room=rooms.get(code);
     if(!room?.players.has(socket.id)||typeof data?.enabled!=='boolean')return;
-    socket.to(code).emit('voice-ready',{from:socket.id,enabled:data.enabled,reply:data.reply===true});
+    socket.to(code).emit('voice-ready',{from:socket.id,enabled:data.enabled,reply:data.reply===true,...(data.restart===true?{restart:true}:{})});
   });
   socket.on('voice-signal', data => {
     const code=socket.data.roomCode,room=rooms.get(code);

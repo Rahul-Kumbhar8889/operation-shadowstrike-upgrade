@@ -110,6 +110,7 @@ app.innerHTML = `
     <span id="playerCount">PLAYERS: 1/2</span>
     <button id="copyCode">COPY CODE</button>
     <button id="voiceButton" aria-pressed="false">ENABLE VOICE</button>
+    <button id="voiceRetry">RETRY VOICE</button>
     <button id="voiceOff">VOICE OFF</button>
     <span id="voiceStatus" role="status">Voice off</span>
     <button id="leaveRoom">LEAVE</button>
@@ -781,6 +782,7 @@ const lobbyConnection = createLobbyConnection({
 const socket = lobbyConnection.socket;
 const voiceChat=createVoiceChat({socket,button:$('#voiceButton'),audio:$('#voiceAudio'),status:$('#voiceStatus')});
 $('#voiceOff').onclick=()=>voiceChat.stop();
+$('#voiceRetry').onclick=()=>voiceChat.retry();
 
 function updateScoreboard(players) {
   $('#playerCount').textContent = `PLAYERS: ${players.length}/2${players.length<2?(coopMode?' — WAITING FOR TEAMMATE':' — WAITING FOR OPPONENT'):(coopMode?' — CO-OP SQUAD':' — PVP LIVE')}`;

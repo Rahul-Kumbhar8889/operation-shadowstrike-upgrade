@@ -12,9 +12,15 @@ export function createVoiceChat({socket,button,audio,status}){
   const current=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});peer=current;
   stream.getAudioTracks().forEach(track=>current.addTrack(track,stream));
   current.onicecandidate=event=>{if(peer===current&&event.candidate)signal({candidate:event.candidate.toJSON()});};
-  current.ontrack=event=>{if(peer!==current)return;audio.srcObject=event.streams[0];audio.play().catch(()=>say('Tap ENABLE VOICE again to hear your teammate'));};
+  current.ontrack=event=>{if(peer!==current)return;audio.srcObject=event.streams[0];audio.play().catch(()=>say('Audio blocked • tap RETRY VOICE'));};
   current.onconnectionstatechange=()=>{if(peer!==current)return;const state=current.connectionState;if(state==='connected')say(muted?'Connected • mic muted':'Voice connected');else if(state==='failed')say('Voice connection failed; try again or another network');else if(state==='disconnected')say('Voice disconnected');};
   return current;
+ }
+ function retry(){
+  if(!stream||!socket.connected){say('Enable voice first');return;}
+  // Rebuild both peers while retaining the already-authorized microphone.
+  closePeer();say('Retrying voice…');socket.emit('voice-ready',{enabled:true,reply:false,restart:true});
+  audio.play().catch(()=>{});
  }
  async function enable(){
   if(starting)return;
@@ -27,6 +33,7 @@ export function createVoiceChat({socket,button,audio,status}){
  button.addEventListener('click',enable);
  socket.on('voice-ready',async data=>{
   if(!stream||!data?.from)return;if(!data.enabled){closePeer();say('Teammate voice off');return;}
+  if(data.restart)closePeer();
   if(!data.reply)socket.emit('voice-ready',{enabled:true,reply:true});
   const current=connect(data.from);if(!current||socket.id>=data.from||offersStarted)return;
   offersStarted=true;try{await current.setLocalDescription(await current.createOffer());if(peer===current)signal({description:current.localDescription.toJSON()});}catch{say('Voice setup failed');}
@@ -39,5 +46,5 @@ export function createVoiceChat({socket,button,audio,status}){
    else if(data.candidate){if(current.remoteDescription)await current.addIceCandidate(data.candidate);else pendingCandidates.push(data.candidate);}
   }catch{say('Voice setup failed; leave and rejoin voice');}
  });
- render();say('Voice off');return {stop,peerLeft(){stop(false);say('Teammate left • voice off');}};
+ render();say('Voice off');return {stop,retry,peerLeft(){stop(false);say('Teammate left • voice off');}};
 }
