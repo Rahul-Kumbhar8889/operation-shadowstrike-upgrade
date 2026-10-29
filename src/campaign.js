@@ -124,6 +124,12 @@ export function createCampaign({
     for(let n=0;n<m.sites.length-1;n++){
       const [ax,az]=m.sites[n],[bx,bz]=m.sites[n+1],length=Math.hypot(bx-ax,bz-az);
       const road=mesh(new THREE.PlaneGeometry(5,length),0x727366,(ax+bx)/2,.005,(az+bz)/2);road.rotation.x=-Math.PI/2;road.rotation.z=-Math.atan2(bx-ax,bz-az);road.userData.surface='asphalt';
+      // Ground markings are visual only, so existing movement and server collision stay unchanged.
+      const dashes=Math.min(18,Math.floor(length/9));
+      for(let j=0;j<dashes;j++){
+        const t=(j+.5)/dashes,mark=mesh(new THREE.PlaneGeometry(.14,3),0xb7b39a,ax+(bx-ax)*t,.018,az+(bz-az)*t);
+        mark.rotation.x=-Math.PI/2;mark.rotation.z=road.rotation.z;
+      }
     }
     for(let i=0;i<m.sites.length;i++){
     const [x,z]=m.sites[i], objective=m.steps[i].position,layout=installationLayout(m,i),front=z+layout.d/2;
@@ -194,6 +200,22 @@ export function createCampaign({
     // Interior desks and equipment establish scale without closing the passage.
     mesh(new THREE.BoxGeometry(1.8,.75,.7),0x485348,x-2,.4,z-2.6);
     mesh(new THREE.BoxGeometry(.7,1.8,.5),0x303c35,x+3,1,z-2.8);
+    // Wall-mounted detail gives each installation a purpose without adding invisible cover.
+    const back=z-layout.d/2+.22;
+    const display=mesh(new THREE.BoxGeometry(1.45,.85,.12),0x182c2b,x-2,2.1,back);
+    display.material.emissive.set(index===1?0x15505a:index===2?0x293b44:0x264639);
+    for(let row=0;row<3;row++){
+      const line=mesh(new THREE.BoxGeometry(.9-row*.16,.025,.025),index===1?0x73c8c1:0x94b38a,x-2.1-row*.06,2.3-row*.19,back+.075);
+      line.material.emissive.set(index===1?0x326860:0x405d38);
+    }
+    const cabinet=mesh(new THREE.BoxGeometry(.6,.9,.16),0x5d6b5a,x+2,2,back);
+    cabinet.material.metalness=.35;
+    mesh(new THREE.BoxGeometry(.04,.15,.04),0xb7bb9d,x+2.2,2,back+.1);
+    // Contrasting entrance lines help players find the doorway during combat.
+    for(const side of [-1,1]){
+      const marker=mesh(new THREE.PlaneGeometry(.18,2),0xc5b061,x+layout.doorOffset+side*1.18,.055,front+.8);
+      marker.rotation.x=-Math.PI/2;
+    }
     }
     // Perimeter terrain, checkpoint towers, fuel stores and an airfield landmark.
     const mountainGeo=new THREE.SphereGeometry(28,20,12,0,Math.PI*2,0,Math.PI/2),mountainMat=new THREE.MeshStandardMaterial({color:0x687263,roughness:1});
