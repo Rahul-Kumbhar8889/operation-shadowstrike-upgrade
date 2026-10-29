@@ -11,27 +11,34 @@ function sight(c,a,b,rayBox,smokes=[],respectSmoke=true){const dx=b.x-a.x,dy=(b.
 export function alertCoopGuards(room,position,noise){const c=room.coop,range=noise*guardResponseMultiplier(c.index,c.step);for(const g of c.guards){if(g.hp>0&&Math.hypot(position.x-g.x,position.z-g.z)<range){g.lastKnown={x:position.x,z:position.z};g.alertUntil=c.tick+8;}}}
 export function hurtGuard(room,guard,damage,shooterId,emit){if(guard.hp<=0)return;guard.hp=Math.max(0,guard.hp-damage);if(!guard.hp){const p=room.players.get(shooterId);if(p)p.kills++;}emit('coop-guard-hit',{id:guard.id,hp:guard.hp,damage,shooterId,position:{x:guard.x,y:1.2,z:guard.z}});}
 export function coopBlast(room,position,shooterId,rayBox,emit){const c=room.coop;for(const g of c.guards){const damage=blastDamage(Math.hypot(position.x-g.x,position.z-g.z));if(damage&&sight(c,{...position,y:.9},{x:g.x,z:g.z,y:1},rayBox,[],false))hurtGuard(room,g,damage,shooterId,emit);}}
-export function interactCoop(room,id){
- const c=room.coop,p=room.players.get(id),m=MISSIONS[c.index];if(!p?.alive||!canCoopAct(room)||c.revive)return false;
+export function interactCoopResult(room,id){
+ const c=room.coop,p=room.players.get(id),m=MISSIONS[c.index],fail=reason=>({ok:false,reason});
+ if(!p?.alive)return fail('player_down');
+ if(room.players.size!==2)return fail('need_teammate');
+ if(c.status!=='active')return fail('mission_not_active');
+ if(c.revive)return fail('action_in_progress');
  const downed=[...room.players].find(([otherId,other])=>otherId!==id&&!other.alive&&Math.hypot(other.position.x-p.position.x,other.position.z-p.position.z)<=3);
- if(downed){if(!(p.equipment?.injection>0))return false;c.revive={id,targetId:downed[0],remaining:4,hp:p.hp};return true;}
- if(c.task||c.chargeRemaining!=null)return false;
- if(!c.intel&&['sweep','rendezvous'].includes(m.steps[c.step]?.kind))return false;
+ if(downed){if(!(p.equipment?.injection>0))return fail('no_injection');c.revive={id,targetId:downed[0],remaining:4,hp:p.hp};return {ok:true};}
+ if(c.chargeRemaining!=null)return fail('charge_armed');
+ if(c.task)return fail('action_in_progress');
+ if(!c.intel&&['sweep','rendezvous'].includes(m.steps[c.step]?.kind))return fail('automatic_zone');
  if(!c.intel&&m.steps[c.step]?.kind==='dual'){
   const step=m.steps[c.step],node=availableDualNode(step,p.position,c.dualDone||[]);
   const threats=c.guards.filter(g=>g.hp>0&&Math.hypot(g.x-p.position.x,g.z-p.position.z)<12).length;
-  if(node<0||threats)return false;c.task={id,node,remaining:step.duration};return true;
+  if(node<0)return fail('rack_too_far');if(threats)return fail('guards_nearby');c.task={id,node,remaining:step.duration};return {ok:true};
  }
  const point=c.intel?m.extract:m.steps[c.step].position;
  const threats=c.guards.filter(g=>g.hp>0&&Math.hypot(g.x-p.position.x,g.z-p.position.z)<12).length;
- if(c.intel ? Math.hypot(p.position.x-point[0],p.position.z-point[1])>2.4||threats>0 : !objectiveSafe(m.steps[c.step],p.position,threats,true))return false;
- if(c.intel){if([...room.players.values()].some(p=>p.alive&&Math.hypot(p.position.x-point[0],p.position.z-point[1])>4))return false;c.status='complete';c.transitionRemaining=c.index<MISSIONS.length-1?5:null;c.revision++;}
- else c.task={id,remaining:m.steps[c.step].duration};return true;
+ if(Math.hypot(p.position.x-point[0],p.position.z-point[1])>2.4)return fail('objective_too_far');
+ if(threats>0&&(c.intel||m.steps[c.step].kind!=='defend'))return fail('guards_nearby');
+ if(c.intel){if([...room.players.values()].some(p=>p.alive&&Math.hypot(p.position.x-point[0],p.position.z-point[1])>4))return fail('team_not_at_extraction');c.status='complete';c.transitionRemaining=c.index<MISSIONS.length-1?5:null;c.revision++;}
+ else c.task={id,remaining:m.steps[c.step].duration};return {ok:true};
 }
+export function interactCoop(room,id){return interactCoopResult(room,id).ok;}
 export function updateCoop(room,dt,now,rayBox,emit){
  const c=room.coop;if(c.status==='complete'&&c.transitionRemaining!==null&&room.players.size===2){c.transitionRemaining=Math.max(0,c.transitionRemaining-dt);if(c.transitionRemaining===0)return 'advance';return;}if(!canCoopAct(room))return;c.tick+=dt;
  if(c.revive){const r=c.revive,p=room.players.get(r.id),target=room.players.get(r.targetId);
-  if(!p?.alive||!target||target.alive||p.hp<r.hp||!(p.equipment?.injection>0)||Math.hypot(p.position.x-target.position.x,p.position.z-target.position.z)>3)c.revive=null;
+  if(!p?.alive||!target||target.alive||p.hp<r.hp||!(p.equipment?.injection>0)||Math.hypot(p.position.x-target.position.x,p.position.z-target.position.z)>3){c.revive=null;emit('coop-action-interrupted',{id:r.id,reason:'revive_interrupted'});}
   else {r.remaining-=dt;if(r.remaining<=0){p.equipment.injection--;target.alive=true;target.hp=350;c.revive=null;c.revision++;emit('coop-player-revived',{id:r.targetId,reviverId:r.id,hp:350,equipment:{...p.equipment}});}}
  }
  const living=[...room.players].filter(([,p])=>p.alive);
@@ -50,7 +57,7 @@ export function updateCoop(room,dt,now,rayBox,emit){
   if(c.holdRemaining===0){c.step++;c.intel=c.step===MISSIONS[c.index].steps.length;c.holdRemaining=null;c.revision++;}
  }
  if(c.task){const p=room.players.get(c.task.id),step=MISSIONS[c.index].steps[c.step],node=c.task.node,checkStep=step.kind==='dual'?{...step,position:dualNodes(step)[node]}:step;
-  if(!p?.alive||!objectiveSafe(checkStep,p.position,c.guards.filter(g=>g.hp>0&&Math.hypot(g.x-p.position.x,g.z-p.position.z)<12).length))c.task=null;
+  if(!p?.alive||!objectiveSafe(checkStep,p.position,c.guards.filter(g=>g.hp>0&&Math.hypot(g.x-p.position.x,g.z-p.position.z)<12).length)){const id=c.task.id;c.task=null;emit('coop-action-interrupted',{id,reason:'objective_interrupted'});}
   else {c.task.remaining-=dt;if(c.task.remaining<=0){if(step.kind==='dual'){const next=recordDualNode(c,node);c.dualDone=next.dualDone;c.step=next.step;}else if(step.kind==='timedcharge')c.chargeRemaining=CHARGE_FUSE_SECONDS;else c.step++;c.intel=c.step===MISSIONS[c.index].steps.length;c.task=null;c.revision++;}}
  }
  for(const g of c.guards){if(g.hp<=0)continue;

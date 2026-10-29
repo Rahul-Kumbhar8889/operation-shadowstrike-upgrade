@@ -2,6 +2,7 @@ import {getQuality,setQuality,applyRendererQuality} from './graphics.js';
 import {createWeaponModel} from './weaponModels.js';
 import {createVoiceChat} from './voiceChat.js';
 import {aimDirection} from './aim.js';
+import {interactionMessage} from './missionFeedback.js';
 import {syncRemoteLife} from './remoteLife.js';
 import {applyDeathPose} from './deathPose.js';
 import {createTouchControls} from './touchControls.js';
@@ -1226,6 +1227,8 @@ socket.on('player-respawned', (data) => {
 });
 
 socket.on('coop-state',snapshot=>{if(!multiplayerActive||!coopMode)return;campaign.sync(snapshot);updateMouseHint();});
+socket.on('coop-action-feedback',data=>{if(multiplayerActive&&coopMode)showMessage(interactionMessage(data?.reason));});
+socket.on('coop-action-interrupted',data=>{if(multiplayerActive&&coopMode&&data?.id===socket.id)showMessage(interactionMessage(data.reason));});
 socket.on('coop-guard-hit',data=>{if(!coopMode)return;if(data.position)campaign.guardImpact(data.position);if(data.shooterId===socket.id){showHitMarker();playHitConfirmation();if(data.hp===0){playElimination();showMessage('GUARD NEUTRALIZED');}}});
 socket.on('coop-guard-fired',data=>{if(!coopMode)return;const origin=new THREE.Vector3(data.origin.x,data.origin.y,data.origin.z),direction=new THREE.Vector3(data.target.x,data.target.y,data.target.z).sub(origin);bulletTracer(origin,direction.clone().normalize(),direction.length());if(origin.distanceTo(soldier.position)<80)playGunshotAt('assault',data.origin,soldier.position,yaw);});
 socket.on('coop-player-down',data=>{if(!coopMode)return;if(data.id===socket.id){alive=false;hp=0;firstPerson=false;reloading=false;reloadToken++;fireHeld=false;updateHUD();showMessage('YOU ARE DOWN — teammate can revive you: approach within 3m, press E, stay safe for 4s. Costs one injection.');}else{const remote=remotePlayers.get(data.id);if(remote){remote.alive=false;remote.deathAge=0;}showMessage('TEAMMATE DOWN — REACH WITHIN 3m AND PRESS E TO REVIVE');}});

@@ -1,5 +1,5 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';
-import {createCoop,coopSnapshot,coopSpawn,interactCoop,updateCoop,hurtGuard,coopBlast} from '../server/coop.js';
+import {createCoop,coopSnapshot,coopSpawn,interactCoop,interactCoopResult,updateCoop,hurtGuard,coopBlast} from '../server/coop.js';
 import {MISSIONS,blocked,dualNodes} from '../shared/campaign.js';
 const noWall=()=>Infinity;
 function room(index){const coop=createCoop(index);return {coop,players:new Map([['a',{position:coopSpawn(coop,0),alive:true,hp:1000,kills:0,deaths:0}],['b',{position:coopSpawn(coop,1),alive:true,hp:1000,kills:0,deaths:0}]]),smokes:[]};}
@@ -25,6 +25,16 @@ test('co-op guards damage players on server; smoke blocks fire; all-down fails; 
  updateCoop(r,.1,2000,noWall,(name,d)=>events.push([name,d]));assert.equal(r.players.get('a').hp,930);
  r.smokes=[{x:0,z:4,expires:Date.now()+16000}];updateCoop(r,.1,4000,noWall,()=>{});assert.equal(r.players.get('a').hp,930);
  r.players.delete('b');r.smokes=[];updateCoop(r,.1,6000,noWall,()=>{});assert.equal(r.players.get('a').hp,930,'requires two players');r.players.set('b',{position:{x:40,z:40},hp:0,alive:false});r.players.get('a').alive=false;updateCoop(r,.1,8000,noWall,()=>{});assert.equal(c.status,'failed');
+});
+test('co-op interaction explains the blocking condition without changing mission state',()=>{
+ const r=room(0),c=r.coop,a=r.players.get('a'),b=r.players.get('b');
+ assert.equal(interactCoopResult(r,'a').reason,'mission_not_active');c.status='active';
+ assert.equal(interactCoopResult(r,'a').reason,'objective_too_far');const [x,z]=MISSIONS[0].steps[0].position;a.position={x,z};
+ c.guards=[{id:0,x:x+3,z,hp:100}];assert.equal(interactCoopResult(r,'a').reason,'guards_nearby');c.guards=[];
+ c.intel=true;c.step=MISSIONS[0].steps.length;const [ex,ez]=MISSIONS[0].extract;a.position={x:ex,z:ez};b.position={x:ex+20,z:ez};
+ assert.equal(interactCoopResult(r,'a').reason,'team_not_at_extraction');assert.equal(c.status,'active');
+ b.alive=false;b.position={...a.position};a.equipment={injection:0};assert.equal(interactCoopResult(r,'a').reason,'no_injection');
+ r.players.delete('b');assert.equal(interactCoopResult(r,'a').reason,'need_teammate');
 });
 test('checkpoint sweep advances for both clients only when a player enters and nearby guards are cleared',()=>{
  const r=room(0),c=r.coop;c.status='active';c.step=2;c.boxes=[];const [x,z]=MISSIONS[0].steps[2].position;

@@ -1,5 +1,5 @@
 import {makeVoiceConfig} from './voiceConfig.js';
-import {alertCoopGuards,createCoop,coopSnapshot,coopSpawn,canCoopAct,updateCoop,interactCoop,hurtGuard,coopBlast} from './coop.js';
+import {alertCoopGuards,createCoop,coopSnapshot,coopSpawn,canCoopAct,updateCoop,interactCoopResult,hurtGuard,coopBlast} from './coop.js';
 import {MISSIONS,blocked,CAMPAIGN_MAX_HP} from '../shared/campaign.js';
 import {EQUIPMENT,createEquipment,throwLanding,blastDamage,healHealth} from '../shared/equipment.js';
 import { WEAPONS, createAmmo, shotDirections } from '../shared/weapons.js';
@@ -491,7 +491,7 @@ io.on('connection', (socket) => {
     rooms.set(code,room);const spawn=addPlayer(socket,room,code);callback(roomResponse(socket,room,code,spawn));sendWeaponState(socket,room.players.get(socket.id));sendState(code,room);
   });
   socket.on('coop-start',()=>{const code=socket.data.roomCode,room=rooms.get(code);if(room?.coop?.status!=='waiting'||room.players.size!==2)return;room.coop.status='active';sendState(code,room);});
-  socket.on('coop-interact',()=>{const code=socket.data.roomCode,room=rooms.get(code);if(room?.coop){interactCoop(room,socket.id);sendState(code,room);}});
+  socket.on('coop-interact',()=>{const code=socket.data.roomCode,room=rooms.get(code);if(room?.coop){const result=interactCoopResult(room,socket.id);if(!result.ok)socket.emit('coop-action-feedback',{reason:result.reason});sendState(code,room);}});
   socket.on('coop-restart',(next=false)=>{
     const code=socket.data.roomCode,room=rooms.get(code);if(!room?.coop||!['failed','complete'].includes(room.coop.status))return;
     const index=next&&room.coop.status==='complete'?(room.coop.index+1)%MISSIONS.length:room.coop.index;resetCoopRoom(code,room,index);
