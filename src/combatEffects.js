@@ -29,7 +29,13 @@ export function createCombatEffects(scene){
  const active=[];const material=(color)=>new THREE.MeshBasicMaterial({color,transparent:true,opacity:1,depthWrite:false});
  function particle(position,color,size=.12,velocity=new THREE.Vector3(),life=.25){const mesh=new THREE.Mesh(new THREE.SphereGeometry(size,6,4),material(color));mesh.position.copy(position);scene.add(mesh);active.push({mesh,velocity,life,initial:life});return mesh;}
  function muzzleFlash(origin,weapon='assault'){const p=origin?.isVector3?origin:new THREE.Vector3(origin?.x||0,origin?.y||1.7,origin?.z||0);particle(p,0xffe7a1,weapon==='sniper'?.38:.24,new THREE.Vector3(),.075);playGunshot(weapon);}
- function shellEjection(origin){const p=origin?.isVector3?origin:new THREE.Vector3(origin?.x||0,origin?.y||1.7,origin?.z||0);particle(p,0xe0bb6c,.055,new THREE.Vector3(1.5,1.3,.2),.45);}
+ function shellEjection(origin,direction){
+  const p=origin?.isVector3?origin:new THREE.Vector3(origin?.x||0,origin?.y||1.7,origin?.z||0);
+  // Eject to the operator's right, independent of the camera's world heading.
+  const dx=Number(direction?.x)||0,dz=Number(direction?.z)||0,length=Math.hypot(dx,dz);
+  const velocity=length>1e-6?new THREE.Vector3(-dz/length*1.5,1.3,dx/length*1.5):new THREE.Vector3(1.5,1.3,0);
+  particle(p,0xe0bb6c,.055,velocity,.45);
+ }
  function bulletImpact(position){const p=position?.isVector3?position:new THREE.Vector3(position?.x||0,position?.y||0,position?.z||0);for(let i=0;i<7;i++){const a=i*2.399;particle(p,0xf6c778,.055,new THREE.Vector3(Math.cos(a)*2,Math.random()*2,Math.sin(a)*2),.2);}playImpact();}
  function explosion(position){const p=position?.isVector3?position:new THREE.Vector3(position?.x||0,position?.y||0,position?.z||0);for(let i=0;i<18;i++){const a=i*2.399;particle(p,i%2?0xff6b1f:0xffd66b,.14,new THREE.Vector3(Math.cos(a)*3,Math.random()*3,Math.sin(a)*3),.55);}playExplosion();}
  function bloodImpact(position){

@@ -1300,10 +1300,11 @@ function shoot() {
   const direction = getAimDirection();
   const origin = getFiringOrigin();
 
-  viewKick=1;
+  // Cosmetic weapon response; the authoritative aim and damage stay unchanged.
+  viewKick=({pistol:.65,smg:.55,carbine:.8,assault:1,lmg:1.15,battle:1.3,marksman:1.35,sniper:1.55,shotgun:1.7})[currentWeapon]||1;
   showMuzzleFlash();
   combatFX.muzzleFlash(origin, currentWeapon);
-  combatFX.shellEjection(origin);
+  combatFX.shellEjection(origin,direction);
   soldier.userData.playRecoil?.();
   soldier.userData.setAimDirection?.(direction);
 
