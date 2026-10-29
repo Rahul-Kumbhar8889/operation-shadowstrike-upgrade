@@ -54,3 +54,4 @@ body:has(#roomPanel:not(.hidden)):has(#missionPanel:not([hidden])) #weaponPanel{
 }
 
 .graphics-setting{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:10px 0;color:#b8ccc5;font:11px Arial;letter-spacing:1px}.graphics-setting select{flex:1;max-width:230px;padding:8px;background:#142830;color:#dceee4;border:1px solid #4b6b60;border-radius:5px}#instructions a{color:#8de3cc}
+#inGameHelp{align-self:flex-start;padding:5px 8px;border:1px solid #52798b;border-radius:5px;background:#173c50;color:#e4f4f6;font:11px Arial;cursor:pointer}#inGameHelp:focus-visible{outline:2px solid #8de3cc;outline-offset:2px}.manual-notice{color:#f6d78e;font-weight:bold}body:has(#lobby:not(.hidden)) #inGameHelp{display:none}

@@ -63,6 +63,7 @@ app.innerHTML = `
     <span>V Camera | M Menu | Esc Release Cursor</span>
     <span id="stats">HP: 100 | AMMO: 30/30</span>
     <span id="networkStatus">OFFLINE TRAINING</span>
+    <button id="inGameHelp" type="button" aria-label="Open field manual">FIELD MANUAL · F1</button>
   </div>
 
   <button id="soundToggle" aria-pressed="false">SOUND ON</button><div id="equipmentHUD"></div><div id="healFlash"></div><div id="smokeOverlay"></div>
@@ -1448,7 +1449,16 @@ const touchControls=createTouchControls({canvas:renderer.domElement,keys,
  active:()=>gameActive()&&alive&&(!campaign.active||campaign.running||campaign.canExplore)&&!document.querySelector('#instructions')?.open});
 const instructions=document.createElement('dialog');instructions.id='instructions';
 instructions.innerHTML=`<h2>FIELD MANUAL</h2><p><strong>Multiplayer:</strong> create a room and share its six-character code. Your friend opens this same link and joins. First to five kills wins. Respawn takes three seconds; both players must agree to rematch.</p><p><strong>Co-op:</strong> select an operation and Create Co-op Mission Room. Both players join by code, then Start Mission. Guard damage and objectives are shared by the server; teammates cannot hurt each other. Both living players must reach extraction. To revive a downed teammate, approach within 3m and press E. Stay close for 4 seconds without taking damage; one injection restores your teammate to 350HP. If both die, restart together.<br><strong>Story:</strong> choose one of four solo operations. Follow the marked equipment and press E within 2.4m. Collect cases, cut switches, plant charges and download server data after clearing guards within 12m. Defense objectives keep running under enemy fire: stay within the marked 14m area for 25 seconds. Use cover and keep fighting. Both living co-op players must reach extraction; the next operation starts automatically. Open OPERATION PLAN for the full checklist.</p><p><strong>Desktop:</strong> WASD move, Shift sprint, mouse look, click fire, R reload, 1–9 weapons, G frag, B smoke, H heal, V view, M menu, Esc release mouse. Z scopes the sniper.</p><p><strong>Phone:</strong> landscape works best. Left joystick moves; drag the scene to look. Hold FIRE for automatic weapons. Buttons reload, switch guns, use equipment and interact.</p><p>Three healing injections per life: +350 story HP or +35 multiplayer HP, capped at maximum. Smoke conceals but does not stop bullets. Frag grenades hurt enemies; self damage is disabled.</p><p><a href="/assets/characters/CREDITS.txt" target="_blank" rel="noopener">Character and animation credits</a></p><button autofocus>CLOSE MANUAL</button>`;
-document.body.append(instructions);instructions.querySelector('button').onclick=()=>instructions.close();$('#howToPlay').onclick=()=>instructions.showModal();
+instructions.insertAdjacentHTML('afterbegin','<p class="manual-notice">Opening this manual does not pause an active game. Find cover first.</p>');
+document.body.append(instructions);instructions.querySelector('button').onclick=()=>instructions.close();
+function openManual(){
+  if(instructions.open)return;
+  fireHeld=false;for(const key in keys)keys[key]=false;
+  if(document.pointerLockElement)document.exitPointerLock?.();
+  instructions.showModal();updateMouseHint();
+}
+instructions.addEventListener('close',updateMouseHint);
+$('#howToPlay').onclick=openManual;$('#inGameHelp').onclick=openManual;
 
 function gameActive() {
   return $('#lobby').classList.contains('hidden');
@@ -1460,7 +1470,7 @@ function mouseLocked() {
 
 function updateMouseHint() {
   $('#mouseHint').style.display =
-    gameActive() && alive && (!campaign.active || campaign.running || campaign.canExplore) && !mouseLocked() ? 'block' : 'none';
+    gameActive() && alive && !instructions.open && (!campaign.active || campaign.running || campaign.canExplore) && !mouseLocked() ? 'block' : 'none';
 }
 
 renderer.domElement.addEventListener('pointerdown', (event) => {
@@ -1495,6 +1505,8 @@ document.addEventListener('mousemove', (event) => {
 });
 
 window.addEventListener('keydown', (event) => {
+  if(event.code==='F1'&&gameActive()){event.preventDefault();if(!event.repeat)openManual();return;}
+  if(instructions.open)return;
   if (['Space', 'ArrowUp', 'ArrowDown'].includes(event.code)) {
     event.preventDefault();
   }
