@@ -144,8 +144,16 @@ export function interactMission(state, position, livingGuards) {
 }
 
 // Shared physical layout for cooperative movement, sight and weapon validation.
+export function approachCover(m){
+ const sites=[2,3,2,4],site=sites[MISSIONS.indexOf(m)];
+ if(site===undefined)return [];
+ const [x,z]=m.sites[site],front=z+installationLayout(m,site).d/2;
+ // Staggered solid barriers leave the doorway and the western entrance open.
+ return [[x-5,front+7,3.6,2.2,1.2],[x+8,front+11,3.6,2.2,1.2]];
+}
 export function campaignObstacles(m){
  const boxes=m.sites.flatMap((_,i)=>installationLayout(m,i).walls);
+ boxes.push(...approachCover(m));
  for(const p of m.landmarks)boxes.push([p.x,p.z,p.w,p.h,p.d]);
  for(let n=0;n<6;n++)boxes.push([-5,55-n*22,5,3,12]);
  for(let n=0;n<5;n++)boxes.push([45+n*4,-5,2.8,3.2,2.8]);
