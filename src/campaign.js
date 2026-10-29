@@ -1,3 +1,4 @@
+import {loadMissionMaterials,applyMissionMaterial} from './missionMaterials.js';
 import {applyDeathPose} from './deathPose.js';
 import {addGuardDetail} from './guardDetail.js';
 import { blastDamage, smokeBlocks } from '../shared/equipment.js';
@@ -26,6 +27,7 @@ export function createCampaign({
   const textures=createEnvironmentTextures();textures.ground.dispose();textures.ground=createTerrainTexture();textures.ground.repeat.set(15,15);
   const baseAtmosphere={background:scene.background,fog:scene.fog?.clone(),lights:scene.children.filter(o=>o.isLight).map(light=>({light,color:light.color.clone(),intensity:light.intensity}))};
   const operationSkies=new Map();
+  let materialGeneration=0;
   const baseColliders=[...obstacles];
   const baseWorld=scene.children.filter(o=>!o.isLight && o!==player);
   const group = new THREE.Group();
@@ -36,7 +38,7 @@ export function createCampaign({
     colliders = [],
     time = 0,
     exit = () => {},
-    beacon, task=null, smokeClouds=[],network=false,networkWaiting=false,networkSynced=false,networkAction=()=>{},transitionRemaining=null,objectiveProps=[],completedEffects=new Set();
+    beacon, task=null,revive=null, smokeClouds=[],network=false,networkWaiting=false,networkSynced=false,networkAction=()=>{},transitionRemaining=null,objectiveProps=[],completedEffects=new Set();
   const ray = new THREE.Raycaster(),
     panel = document.createElement("section");
   panel.id = "missionPanel";
@@ -71,6 +73,7 @@ export function createCampaign({
     return o;
   }
   function cleanup() {
+    materialGeneration++;
     for (const o of colliders) {
       const i = obstacles.indexOf(o);
       if (i >= 0) obstacles.splice(i, 1);
@@ -97,7 +100,7 @@ export function createCampaign({
     for(const o of baseWorld)o.visible=false;
     failure.hidden = true;transitionRemaining=null;
     state = { index, status: "active", intel: false, step:0 };
-    time = 0;task=null;smokeClouds=[];objectiveProps=[];completedEffects.clear();
+    time = 0;task=null;revive=null;smokeClouds=[];objectiveProps=[];completedEffects.clear();
     group.visible = true;
     panel.hidden = false;
     const m = MISSIONS[index];
@@ -112,13 +115,13 @@ export function createCampaign({
     if(scene.fog){scene.fog.color.setHex(sky);scene.fog.near=index===2?65:110;scene.fog.far=index===2?260:350;}
     for(const {light,intensity} of baseAtmosphere.lights){if(light.isDirectionalLight){light.intensity=intensity*(index===2?.38:index===3?.85:1);light.color.setHex(index===2?0x9cb9df:0xffe4bd);}else if(light.isHemisphereLight)light.intensity=intensity*(index===2?.65:1);}
 
-    const floor=mesh(new THREE.PlaneGeometry(500,500),index===1?0x5a655a:0x8a8061,0,-.02,0);floor.rotation.x=-Math.PI/2;floor.material.map=textures.ground;floor.material.bumpMap=textures.ground;floor.material.bumpScale=.04;floor.material.color.set(0xffffff);
+    const floor=mesh(new THREE.PlaneGeometry(500,500),index===1?0x5a655a:0x8a8061,0,-.02,0);floor.rotation.x=-Math.PI/2;floor.material.map=textures.ground;floor.material.bumpMap=textures.ground;floor.material.bumpScale=.04;floor.material.color.set(0xffffff);floor.userData.surface='ground';
     const treeGeometry=new THREE.ConeGeometry(2.7,9,7),treeMaterial=new THREE.MeshStandardMaterial({color:0x42533c});
     const trees=new THREE.InstancedMesh(treeGeometry,treeMaterial,100),dummy=new THREE.Object3D();
     for(let n=0;n<100;n++){const angle=n/100*Math.PI*2,r=175+(n%7)*2,edge=Math.max(Math.abs(Math.cos(angle)),Math.abs(Math.sin(angle)));dummy.position.set(Math.cos(angle)/edge*r,4.5,Math.sin(angle)/edge*r);dummy.scale.setScalar(1+(n%4)*.18);dummy.updateMatrix();trees.setMatrixAt(n,dummy.matrix);}group.add(trees);
     for(let n=0;n<m.sites.length-1;n++){
       const [ax,az]=m.sites[n],[bx,bz]=m.sites[n+1],length=Math.hypot(bx-ax,bz-az);
-      const road=mesh(new THREE.PlaneGeometry(5,length),0x727366,(ax+bx)/2,.005,(az+bz)/2);road.rotation.x=-Math.PI/2;road.rotation.z=-Math.atan2(bx-ax,bz-az);
+      const road=mesh(new THREE.PlaneGeometry(5,length),0x727366,(ax+bx)/2,.005,(az+bz)/2);road.rotation.x=-Math.PI/2;road.rotation.z=-Math.atan2(bx-ax,bz-az);road.userData.surface='asphalt';
     }
     for(let i=0;i<m.sites.length;i++){
     const [x,z]=m.sites[i], objective=m.steps[i].position;
@@ -133,7 +136,7 @@ export function createCampaign({
         d,
         mesh: mesh(new THREE.BoxGeometry(w, h, d), 0x8c927d, a, h / 2, b),
       };
-      o.mesh.material.map=textures.concrete;
+      o.mesh.material.map=textures.concrete;o.mesh.userData.surface='concrete';
       obstacles.push(o);
       colliders.push(o);
     }
@@ -199,7 +202,7 @@ export function createCampaign({
     }
     // Service installations vary by operation; all large props have colliders.
     const prop=(x,z,w,h,d,color)=>{const item={x,z,w,h,d,mesh:mesh(new THREE.BoxGeometry(w,h,d),color,x,h/2,z)};obstacles.push(item);colliders.push(item);return item.mesh;};
-    for(let n=0;n<5;n++){const tank=mesh(new THREE.CylinderGeometry(1.4,1.4,3.2,16),0x818575,45+n*4,1.6,-5);tank.material.metalness=.4;const item={x:45+n*4,z:-5,w:2.8,h:3.2,d:2.8,mesh:tank};obstacles.push(item);colliders.push(item);}
+    for(let n=0;n<5;n++){const tank=mesh(new THREE.CylinderGeometry(1.4,1.4,3.2,16),0x818575,45+n*4,1.6,-5);tank.material.metalness=.4;tank.userData.surface='metal';const item={x:45+n*4,z:-5,w:2.8,h:3.2,d:2.8,mesh:tank};obstacles.push(item);colliders.push(item);}
     const radarBase=prop(-45,110,5,6,5,0x657269);
     const dish=mesh(new THREE.SphereGeometry(4,20,12,0,Math.PI*2,0,Math.PI/2),0xb1b9ad,-45,9,110);dish.rotation.z=.7;dish.material.side=THREE.DoubleSide;
     if(index===3){const runway=mesh(new THREE.PlaneGeometry(18,230),0x494e49,0,.01,0);runway.rotation.x=-Math.PI/2;for(let n=0;n<20;n++){const stripe=mesh(new THREE.PlaneGeometry(.3,5),0xd0c8a5,0,.025,-105+n*11);stripe.rotation.x=-Math.PI/2;}}
@@ -256,6 +259,8 @@ export function createCampaign({
       };
     });
     onReset({ x:m.building[0], z:m.building[1]+15 });
+    const generation=materialGeneration;
+    loadMissionMaterials().then(maps=>{if(generation!==materialGeneration)return;group.traverse(o=>{if(o.isMesh&&o.userData.surface)applyMissionMaterial(o.material,maps,o.userData.surface);});});
     paint();
     message(m.brief);
   }
@@ -265,7 +270,7 @@ export function createCampaign({
     q("h2").textContent = m.name;
     q(".brief").textContent = m.brief;
     const step=state.step||0, current=m.steps[step];
-    const progress=q('.task-progress');progress.hidden=!task;progress.value=task&&current?Math.max(0,1-task.remaining/current.duration):0;
+    const progress=q('.task-progress');progress.hidden=!task&&!revive;progress.value=revive?Math.max(0,1-revive.remaining/4):task&&current?Math.max(0,1-task.remaining/current.duration):0;
     const plan=q('.operation-plan ol');
     const planKey=`${state.index}:${step}`;
     if(plan.dataset.key!==planKey){plan.dataset.key=planKey;plan.replaceChildren(...m.steps.map((item,i)=>{const li=document.createElement('li');li.textContent=`${i<step?'✓ ':i===step?'→ ':''}${item.action}`;if(i===step)li.setAttribute('aria-current','step');return li;}));}
@@ -273,6 +278,7 @@ export function createCampaign({
     for(let i=0;i<objectiveProps.length;i++){const prop=objectiveProps[i],done=i<step;if(done&&!completedEffects.has(i)){completedEffects.add(i);if(prop.kind==='plant'){const [x,z]=m.steps[i].position;if(!network||networkSynced)demolition(new THREE.Vector3(x,1,z));for(const o of prop.parts)o.material.color.multiplyScalar(.25);}}for(const o of prop.parts)o.visible=!(done&&(prop.kind==='recover'||prop.kind==='plant'&&o===prop.indicator));prop.indicator.material.color.set(done?0x66716c:i===step?0x50efb1:0xcb984c);prop.indicator.material.emissive.set(done?0x000000:i===step?0x1f926a:0x392400);}
     q('.objective').textContent=state.status==='failed'?'MISSION FAILED':state.status==='complete'?'OPERATION COMPLETE':current?`OBJECTIVE ${step+1}/${m.steps.length}: ${current.action} • ${current.hint} • Press E at the marked equipment • ${left} guards alive`:'REACH EXTRACTION • Clear nearby guards and press E';
     if(task && state.status==='active')q('.objective').textContent=`${current.action} • ${Math.ceil(task.remaining)}s • Stay within ${current.radius}m${current.kind==='defend'?' — KEEP FIGHTING; defend the relay':' — nearby threats interrupt'}`;
+    if(revive&&state.status==='active')q('.objective').textContent=`REVIVING TEAMMATE • ${Math.ceil(revive.remaining)}s • Stay within 3m; taking damage interrupts. Costs one injection.`;
     q('.start').hidden=!network||state.status!=='waiting'||networkWaiting;
     q('.retry').hidden=network&&state.status!=='failed'&&state.status!=='complete';
     if(network && (networkWaiting||state.status==='waiting'))q('.objective').textContent=networkWaiting?'CO-OP: WAITING FOR SECOND PLAYER — safe exploration available; share your room code':'SQUAD READY — press START CO-OP MISSION or Enter';
@@ -472,7 +478,7 @@ export function createCampaign({
     setNetworkAction(fn){networkAction=fn;},
     sync(snapshot){
       if(!network)return;
-      const previous=state.step;state={index:snapshot.index,status:snapshot.status,step:snapshot.step,intel:snapshot.intel};networkWaiting=snapshot.waiting;task=snapshot.task;transitionRemaining=snapshot.transitionRemaining??null;
+      const previous=state.step;state={index:snapshot.index,status:snapshot.status,step:snapshot.step,intel:snapshot.intel};networkWaiting=snapshot.waiting;task=snapshot.task;revive=snapshot.revive||null;transitionRemaining=snapshot.transitionRemaining??null;
       for(const data of snapshot.guards){const e=enemies[data.id];if(!e)continue;e.networkMoving=Math.hypot(e.model.position.x-data.x,e.model.position.z-data.z)>.01;const killed=e.hp>0&&data.hp<=0;e.hp=data.hp;if(killed){e.deathAge=0;blood(new THREE.Vector3(data.x,1.1,data.z));}e.model.position.x=data.x;e.model.position.z=data.z;e.model.rotation.y=data.rotation;if(e.hp>0){e.model.position.y=0;e.model.rotation.x=0;}}
       if(networkSynced&&previous!==state.step)playObjective();
       paint();networkSynced=true;

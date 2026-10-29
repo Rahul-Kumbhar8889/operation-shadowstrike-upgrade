@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-// Procedural sound and particle effects; no external audio assets.
+// Self-hosted recorded firearm audio, with procedural fallback and particle effects.
 let context,master,muted=false,noiseBuffer,samplePromise;
 const samples=new Map();
 export function preloadCombatAudio(){unlockAudio();samplePromise??=Promise.all(['rifle','pistol','sniper','shotgun','smg','reload'].map(async id=>{try{const response=await fetch(`/audio/${id}.ogg`);if(!response.ok)return;const c=unlockAudio();if(c)samples.set(id,await c.decodeAudioData(await response.arrayBuffer()));}catch{}}));return samplePromise;}

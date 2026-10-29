@@ -1,10 +1,11 @@
+import {createWeaponModel} from './weaponModels.js';
+import {syncRemoteLife} from './remoteLife.js';
 import {applyDeathPose} from './deathPose.js';
 import {createTouchControls} from './touchControls.js';
 import {EQUIPMENT,createEquipment,throwLanding,healHealth,smokeBlocks} from '../shared/equipment.js';
 import {createEquipmentEffects} from './equipmentEffects.js';
 import { WEAPONS, createAmmo, shotDirections } from '../shared/weapons.js';
 import * as THREE from 'three';
-import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { createLobbyConnection } from './multiplayerConnection.js';
 import { createBattlefield } from './battlefield.js';
 import { createSoldier } from './soldier.js';
@@ -387,88 +388,7 @@ campaign.setExit(leaveGame);
 campaign.setNetworkAction(action=>socket.emit(action==='interact'?'coop-interact':action==='start'?'coop-start':'coop-restart',action==='next'));
 
 
-function weaponBox(parent, w, h, d, material, x, y, z) {
-  let geometry;
-  if(w<=.09&&Math.abs(w-h)<.001&&d>.3){geometry=new THREE.CylinderGeometry(w/2,w/2,d,12);geometry.rotateX(Math.PI/2);}
-  else geometry=new RoundedBoxGeometry(w,h,d,2,Math.min(w,h,d)*.15);
-  const mesh = new THREE.Mesh(geometry, material);
-
-  mesh.position.set(x, y, z);
-  mesh.castShadow = true;
-  parent.add(mesh);
-
-  return mesh;
-}
-
-function buildWeaponModel(id) {
-  const group = new THREE.Group();
-
-  const dark = new THREE.MeshStandardMaterial({
-    color: id === 'sniper' ? 0x343e31 : 0x242d35,
-    metalness: 0.45,
-    roughness: 0.5,
-  });
-
-  const metal = new THREE.MeshStandardMaterial({
-    color: 0x11171c,
-    metalness: 0.65,
-    roughness: 0.35,
-  });
-
-  const accent = new THREE.MeshStandardMaterial({
-    color: 0x59666c,
-    metalness: 0.35,
-    roughness: 0.55,
-  });
-
-  if (['assault','smg','lmg','shotgun','carbine','battle','marksman'].includes(id)) {
-    weaponBox(group, 0.18, 0.19, 0.82, dark, 0, 0, -0.32);
-    weaponBox(group, 0.15, 0.15, 0.53, accent, 0, 0, -0.87);
-    weaponBox(group, 0.065, 0.065, 0.54, metal, 0, 0, -1.32);
-    weaponBox(group, 0.2, 0.2, 0.38, dark, 0, -0.02, 0.26);
-    weaponBox(group, 0.15, 0.32, 0.2, metal, 0, -0.24, -0.37);
-    weaponBox(group, 0.12, 0.12, 0.18, accent, 0, 0.17, -0.48);
-  }
-
-  if (id === 'sniper') {
-    weaponBox(group, 0.17, 0.2, 1.12, dark, 0, 0, -0.4);
-    weaponBox(group, 0.075, 0.075, 1.12, metal, 0, 0.02, -1.42);
-    weaponBox(group, 0.24, 0.22, 0.48, dark, 0, -0.04, 0.35);
-    weaponBox(group, 0.14, 0.3, 0.17, metal, 0, -0.24, -0.36);
-    weaponBox(group, 0.09, 0.17, 0.14, metal, 0, 0.2, -0.42);
-
-    const scope = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.09, 0.09, 0.62, 12),
-      metal
-    );
-
-    scope.rotation.x = Math.PI / 2;
-    scope.position.set(0, 0.3, -0.45);
-    group.add(scope);
-
-    weaponBox(group, 0.2, 0.19, 0.08, accent, 0, 0.3, -0.75);
-  }
-
-  if (id === 'pistol') {
-    weaponBox(group, 0.17, 0.16, 0.55, metal, 0, 0, -0.27);
-    weaponBox(group, 0.16, 0.13, 0.35, dark, 0, -0.12, -0.2);
-
-    const grip = weaponBox(group, 0.16, 0.39, 0.17, dark, 0, -0.28, -0.08);
-
-    grip.rotation.x = -0.2;
-
-    weaponBox(group, 0.09, 0.08, 0.1, accent, 0, 0.1, -0.5);
-    group.position.z = -0.1;
-  }
-
-  if(id==='carbine')group.scale.set(1,1,.8);
-  if(id==='battle'){group.scale.set(1.15,1.05,1.08);weaponBox(group,.13,.3,.18,accent,0,-.25,-.4);}
-  if(id==='marksman'){group.scale.z=1.2;weaponBox(group,.12,.12,.35,metal,0,.23,-.5);}
-  if(id==='smg'){group.scale.set(.85,.85,.65);weaponBox(group,.13,.13,.45,metal,0,0,-1.65);}
-  if(id==='shotgun'){group.scale.set(1,1,1.05);weaponBox(group,.19,.20,.40,accent,0,-.06,-.9);}
-  if(id==='lmg'){weaponBox(group,.40,.30,.33,dark,0,-.28,-.4);weaponBox(group,.05,.4,.05,metal,.15,-.25,-1.2);weaponBox(group,.05,.4,.05,metal,-.15,-.25,-1.2);}
-  return group;
-}
+function buildWeaponModel(id) { return createWeaponModel(id); }
 
 function prepareWeaponModels(character) {
   const rifle = character.userData.rifle;
@@ -1089,8 +1009,7 @@ socket.on('game-state', (players) => {
     const remote = remotePlayers.get(player.id);
 
     if (remote) {
-      remote.alive=player.alive!==false;
-      remote.group.visible=remote.alive;
+      syncRemoteLife(remote,player.alive!==false);
 
       if (WEAPONS[player.weapon]) {
         remote.weapon = player.weapon;
@@ -1288,7 +1207,14 @@ socket.on('player-respawned', (data) => {
 socket.on('coop-state',snapshot=>{if(!multiplayerActive||!coopMode)return;campaign.sync(snapshot);updateMouseHint();});
 socket.on('coop-guard-hit',data=>{if(!coopMode)return;if(data.position)campaign.guardImpact(data.position);if(data.shooterId===socket.id){showHitMarker();playHitConfirmation();}});
 socket.on('coop-guard-fired',data=>{if(!coopMode)return;const origin=new THREE.Vector3(data.origin.x,data.origin.y,data.origin.z),direction=new THREE.Vector3(data.target.x,data.target.y,data.target.z).sub(origin);bulletTracer(origin,direction.clone().normalize(),direction.length());if(origin.distanceTo(soldier.position)<80)playGunshotAt('assault',data.origin,soldier.position,yaw);});
-socket.on('coop-player-down',data=>{if(!coopMode)return;if(data.id===socket.id){alive=false;hp=0;firstPerson=false;reloading=false;reloadToken++;fireHeld=false;updateHUD();showMessage('YOU ARE DOWN — your teammate can finish. Restart is available if the squad fails.');}else{const remote=remotePlayers.get(data.id);if(remote){remote.alive=false;remote.deathAge=0;}}});
+socket.on('coop-player-down',data=>{if(!coopMode)return;if(data.id===socket.id){alive=false;hp=0;firstPerson=false;reloading=false;reloadToken++;fireHeld=false;updateHUD();showMessage('YOU ARE DOWN — teammate can revive you: approach within 3m, press E, stay safe for 4s. Costs one injection.');}else{const remote=remotePlayers.get(data.id);if(remote){remote.alive=false;remote.deathAge=0;}}});
+socket.on('coop-player-revived',data=>{
+ if(!coopMode)return;
+ if(data.reviverId===socket.id)inventory={...data.equipment};
+ if(data.id===socket.id){syncRemoteLife({group:soldier,alive:false},true);alive=true;hp=data.hp;firstPerson=true;fireHeld=false;reloading=false;reloadToken++;showMessage('TEAMMATE REVIVED YOU • 350 HP');}
+ else {const remote=remotePlayers.get(data.id);if(remote)syncRemoteLife(remote,true);showMessage('TEAMMATE BACK IN THE FIGHT');}
+ updateHUD();updateMouseHint();
+});
 socket.on('coop-reset',data=>{if(!coopMode)return;campaign.start(data.coop.index,{network:true});campaign.sync(data.coop);const self=data.players.find(p=>p.id===socket.id);alive=true;hp=self.hp;soldier.position.set(self.position.x,0,self.position.z);resetPlayerWeapons();for(const p of data.players)addRemotePlayer(p);updateScoreboard(data.players);updateHUD();updateMouseHint();});
 
 socket.on('disconnect', (reason) => {
@@ -1516,7 +1442,7 @@ const touchControls=createTouchControls({canvas:renderer.domElement,keys,
  camera:()=>{firstPerson=!firstPerson;},menu:leaveGame,
  active:()=>gameActive()&&alive&&(!campaign.active||campaign.running||campaign.canExplore)&&!document.querySelector('#instructions')?.open});
 const instructions=document.createElement('dialog');instructions.id='instructions';
-instructions.innerHTML=`<h2>FIELD MANUAL</h2><p><strong>Multiplayer:</strong> create a room and share its six-character code. Your friend opens this same link and joins. First to five kills wins. Respawn takes three seconds; both players must agree to rematch.</p><p><strong>Co-op:</strong> select an operation and Create Co-op Mission Room. Both players join by code, then Start Mission. Guard damage and objectives are shared by the server; teammates cannot hurt each other. Both living players must reach extraction. If both die, restart together.<br><strong>Story:</strong> choose one of four solo operations. Follow the marked equipment and press E within 2.4m. Collect cases, cut switches, plant charges and download server data after clearing guards within 12m. Defense objectives keep running under enemy fire: stay within the marked 14m area for 25 seconds. Use cover and keep fighting. Both living co-op players must reach extraction; the next operation starts automatically. Open OPERATION PLAN for the full checklist.</p><p><strong>Desktop:</strong> WASD move, Shift sprint, mouse look, click fire, R reload, 1–9 weapons, G frag, B smoke, H heal, V view, M menu, Esc release mouse. Z scopes the sniper.</p><p><strong>Phone:</strong> landscape works best. Left joystick moves; drag the scene to look. Hold FIRE for automatic weapons. Buttons reload, switch guns, use equipment and interact.</p><p>Three healing injections per life: +350 story HP or +35 multiplayer HP, capped at maximum. Smoke conceals but does not stop bullets. Frag grenades hurt enemies; self damage is disabled.</p><button autofocus>CLOSE MANUAL</button>`;
+instructions.innerHTML=`<h2>FIELD MANUAL</h2><p><strong>Multiplayer:</strong> create a room and share its six-character code. Your friend opens this same link and joins. First to five kills wins. Respawn takes three seconds; both players must agree to rematch.</p><p><strong>Co-op:</strong> select an operation and Create Co-op Mission Room. Both players join by code, then Start Mission. Guard damage and objectives are shared by the server; teammates cannot hurt each other. Both living players must reach extraction. To revive a downed teammate, approach within 3m and press E. Stay close for 4 seconds without taking damage; one injection restores your teammate to 350HP. If both die, restart together.<br><strong>Story:</strong> choose one of four solo operations. Follow the marked equipment and press E within 2.4m. Collect cases, cut switches, plant charges and download server data after clearing guards within 12m. Defense objectives keep running under enemy fire: stay within the marked 14m area for 25 seconds. Use cover and keep fighting. Both living co-op players must reach extraction; the next operation starts automatically. Open OPERATION PLAN for the full checklist.</p><p><strong>Desktop:</strong> WASD move, Shift sprint, mouse look, click fire, R reload, 1–9 weapons, G frag, B smoke, H heal, V view, M menu, Esc release mouse. Z scopes the sniper.</p><p><strong>Phone:</strong> landscape works best. Left joystick moves; drag the scene to look. Hold FIRE for automatic weapons. Buttons reload, switch guns, use equipment and interact.</p><p>Three healing injections per life: +350 story HP or +35 multiplayer HP, capped at maximum. Smoke conceals but does not stop bullets. Frag grenades hurt enemies; self damage is disabled.</p><button autofocus>CLOSE MANUAL</button>`;
 document.body.append(instructions);instructions.querySelector('button').onclick=()=>instructions.close();$('#howToPlay').onclick=()=>instructions.showModal();
 
 function gameActive() {
@@ -1621,7 +1547,7 @@ function animate() {
   touchControls.update();
   if(!gameActive()){fireHeld=false;if(!lobbyRendered){renderer.render(scene,camera);lobbyRendered=true;}return;}
   lobbyRendered=false;
-  if(coopMode&&!campaign.running&&!mouseLocked()){const now=performance.now();if(now-lastWaitingFrame<200)return;lastWaitingFrame=now;}
+  if(coopMode&&!mouseLocked()){const now=performance.now();if(now-lastWaitingFrame<1000)return;lastWaitingFrame=now;}
   let moving = false;
   if(fireHeld && mouseLocked() && gameActive() && alive && WEAPONS[currentWeapon].automatic)shoot();
 

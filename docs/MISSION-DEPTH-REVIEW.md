@@ -14,7 +14,17 @@ This work is isolated on `feat/mission-depth-review`. Do not push to the Render-
 - Mission lighting/sky and building details improve environmental distinction. Returning to training or PvP restores the original atmosphere.
 - Existing 1000HP campaign health, nine firearms, inventory, death poses, room codes and automatic campaign transitions remain.
 
+## Additional release polish
+
+- Existing self-hosted Poly Haven maps are now applied to mission terrain, concrete, roads and metal; procedural materials remain the loading fallback.
+- Nine original firearm models have distinct barrels, magazines, stocks and sight assemblies, batched into at most four material meshes per visible weapon.
+- Periodic multiplayer snapshots preserve fallen bodies and reset their articulated pose after revival/respawn.
+- Cooperative revival: press E within 3m of a downed teammate, stay within range without taking damage for 4 seconds, consume one injection and restore 350HP. Leaving range, damage or missing supplies cancels the action. All-down still fails the mission.
+- Unlocked co-op view renders at 1Hz to avoid queuing expensive scenery frames while players use menus. Camera-locked gameplay retains the normal render loop.
+
 ## Validation
+
+Current unit checks: 51 passed. Production build passed; larger-than-500KB bundle warning remains. Two isolated browser sessions passed co-op joining/start/shared objective/pause, and a dedicated two-browser fixture passed downed-state replication, timed revival, 350HP recovery and exactly one injection consumed. The fixture seeds a downed state in memory; it adds no shipped endpoint or debug listener. Software-rendered checks initially stalled under concurrent rendering; reducing unlocked co-op rendering to 1Hz allowed the revive check to complete. Final mouse/touch laptop firing, mobile touch controls and all-four-operation traversal passed after the final code changes. This is not deployment approval.
 
 Run `npm test`, `npm run build`, and the campaign, co-op, mobile and hybrid browser scripts with BROWSER_EXECUTABLE set to an installed Chromium.
 
