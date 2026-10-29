@@ -17,7 +17,9 @@ try{
    for(const guard of guards.filter(g=>g.hp>0)){const origin=guard.model.position.clone().add(new THREE.Vector3(0,1.25,1));if(!campaign.hit(origin,new THREE.Vector3(0,0,-1),200,2)){const bounds=new THREE.Box3().setFromObject(guard.model);throw Error('guard hit ray '+JSON.stringify({position:guard.model.position.toArray(),bounds:[bounds.min.toArray(),bounds.max.toArray()],meshes:campaign.aimMeshes().filter(o=>o.userData.guard===guard).map(o=>({name:o.name,visible:o.visible,skin:o.isSkinnedMesh}))}));}}
    ok(campaign.aimMeshes().length===0,'all neutralized models remain prone and are no longer targetable');
    for(let step=0;step<m.steps.length;step++){
-    const point=m.steps[step].position;player.position.set(point[0],0,point[1]);campaign.interact();
+    const point=m.steps[step].position;player.position.set(point[0],0,point[1]);
+    if(m.steps[step].kind==='sweep'){campaign.update(.1,true);ok(panel.querySelector('.objective').textContent.includes(`OBJECTIVE ${step+2}/`),'entering cleared checkpoint advances the mission');continue;}
+    campaign.interact();
     if(step===0){player.position.x+=4;campaign.update(.1,true);ok(panel.querySelector('.objective').textContent.includes(`OBJECTIVE 1/`),'leaving terminal interrupts action');player.position.x-=4;campaign.interact();}
     campaign.update(m.steps[step].duration-.1,true);ok(panel.querySelector('.objective').textContent.includes('Stay within'),'action cannot finish early');campaign.update(.11,true);
    }

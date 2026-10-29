@@ -8,7 +8,9 @@ for(let index=0;index<MISSIONS.length;index++)test(`co-op ${index+1}: ordered sh
  assert.equal(interactCoop(r,'a'),false,'waiting room cannot progress');c.status='active';
  for(const guard of c.guards)hurtGuard(r,guard,100,'a',()=>{});assert.equal(a.kills,m.guards.length);
  for(let step=0;step<m.steps.length;step++){
-  const [x,z]=m.steps[step].position;a.position={x,z};assert.ok(interactCoop(r,'a'));
+  const [x,z]=m.steps[step].position;a.position={x,z};
+  if(m.steps[step].kind==='sweep'){assert.equal(interactCoop(r,'a'),false);updateCoop(r,.1,Date.now(),noWall,()=>{});assert.equal(c.step,step+1);continue;}
+  assert.ok(interactCoop(r,'a'));
   if(step===0){a.position.x+=4;updateCoop(r,.1,Date.now(),noWall,()=>{});assert.equal(c.task,null);a.position.x-=4;assert.ok(interactCoop(r,'a'));}
   updateCoop(r,m.steps[step].duration-.1,Date.now(),noWall,()=>{});assert.equal(c.step,step);updateCoop(r,.11,Date.now(),noWall,()=>{});assert.equal(c.step,step+1);
  }
@@ -19,6 +21,14 @@ test('co-op guards damage players on server; smoke blocks fire; all-down fails; 
  updateCoop(r,.1,2000,noWall,(name,d)=>events.push([name,d]));assert.equal(r.players.get('a').hp,930);
  r.smokes=[{x:0,z:4,expires:Date.now()+16000}];updateCoop(r,.1,4000,noWall,()=>{});assert.equal(r.players.get('a').hp,930);
  r.players.delete('b');r.smokes=[];updateCoop(r,.1,6000,noWall,()=>{});assert.equal(r.players.get('a').hp,930,'requires two players');r.players.set('b',{position:{x:40,z:40},hp:0,alive:false});r.players.get('a').alive=false;updateCoop(r,.1,8000,noWall,()=>{});assert.equal(c.status,'failed');
+});
+test('checkpoint sweep advances for both clients only when a player enters and nearby guards are cleared',()=>{
+ const r=room(0),c=r.coop;c.status='active';c.step=2;c.boxes=[];const [x,z]=MISSIONS[0].steps[2].position;
+ const a=r.players.get('a'),b=r.players.get('b');a.position={x:x+20,z};b.position={x:x+20,z};
+ c.guards=[{id:0,x:x+10,z,homeX:x+10,homeZ:z,hp:100,rotation:0,phase:0,lastFire:0}];
+ updateCoop(r,.01,0,noWall,()=>{});assert.equal(c.step,2);
+ a.position={x,z};updateCoop(r,.01,0,noWall,()=>{});assert.equal(c.step,2,'living guard blocks progress');
+ c.guards[0].hp=0;updateCoop(r,.01,0,noWall,()=>{});assert.equal(c.step,3);assert.equal(coopSnapshot(r).step,3);assert.equal(c.task,null);
 });
 test('all co-op spawns and terminals have valid shared collision; blast hits guards, not teammates',()=>{
  for(let i=0;i<MISSIONS.length;i++){const r=room(i),c=r.coop;for(const p of r.players.values())assert.equal(blocked(p.position.x,p.position.z,c.boxes),false);for(const step of MISSIONS[i].steps)assert.equal(blocked(...step.position,c.boxes),false);c.status='active';const g=c.guards[0];coopBlast(r,{x:g.x,z:g.z},'a',noWall,()=>{});assert.equal(g.hp,0);assert.equal(r.players.get('a').hp,1000);assert.equal(r.players.get('b').hp,1000);}

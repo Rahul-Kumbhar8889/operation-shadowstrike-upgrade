@@ -22,20 +22,32 @@ MISSIONS.push({name:'04 / IRON HORIZON',brief:'Penetrate the airfield perimeter,
 for(const m of MISSIONS){m.steps=m.sites.map(([x,z],i)=>({position:[x,z-2],action:m.actions[i],duration:i%3===1?10:i%3===2?6:3}));m.objective=m.steps[0].position;m.action=m.actions[0];}
 // Objective mechanics are shared by solo and the authoritative co-op server.
 const operationPlans = [
- [['switch','ISOLATE CCTV','Cut the security feed to reduce guard detection range across the compound.'],['recover','SEIZE DISPATCH CODES','Recover the dispatch case from the office.'],['defend','HOLD FREIGHT CHECKPOINT','Start the override, then defend the checkpoint for 25 seconds.'],['plant','RIG FUEL CONTROL','Attach a demolition charge to the fuel controller.'],['recover','RECOVER TRANSPORT MANIFEST','Collect the transport dossier.'],['defend','TRANSMIT FIELD EVIDENCE','Hold the relay area while headquarters receives the evidence.']],
+ [['switch','ISOLATE CCTV','Cut the security feed to reduce guard detection range across the compound.'],['recover','SEIZE DISPATCH CODES','Recover the dispatch case from the office.'],['sweep','CLEAR FREIGHT CHECKPOINT','Enter the checkpoint zone and eliminate guards within 14m of its center.'],['plant','RIG FUEL CONTROL','Attach a demolition charge to the fuel controller.'],['recover','RECOVER TRANSPORT MANIFEST','Collect the transport dossier.'],['defend','TRANSMIT FIELD EVIDENCE','Hold the relay area while headquarters receives the evidence.']],
  [['recover','ACQUIRE SECURITY KEYCARD','Take the access card from the security office.'],['switch','CUT GENERATOR POWER','Isolate the generator breaker.'],['plant','DESTROY UPLINK CONTROL','Rig the uplink; disrupting communications reduces the guard response radius to gunfire.'],['download','DOWNLOAD ENCRYPTION DATA','Remain at the server while the encrypted archive downloads.'],['switch','SHUT DOWN RADAR','Cut the radar tracking circuit.'],['defend','HOLD EMERGENCY RELAY','Protect the relay during the final transmission.']],
  [['recover','RECOVER ACCESS CODES','Collect the command access case.'],['switch','DISABLE BASE ALARM','Disconnect the alarm to reduce the guard response radius to gunfire.'],['download','COPY DETENTION RECORDS','Download the detention records at the server rack.'],['defend','SECURE HANGAR OVERRIDE','Defend the hangar controls until the route opens.'],['plant','DEMOLISH COMMAND ARCHIVE','Place a charge on the archive controller.'],['recover','RECOVER EVACUATION DOSSIER','Take the evacuation dossier before extraction.']],
  [['switch','BREACH PERIMETER CONTROL','Open the airfield security circuit.'],['plant','SABOTAGE AIRFIELD RADAR','Rig the radar to reduce guard detection range across the airfield.'],['switch','CUT RUNWAY POWER','Isolate the runway lighting breaker.'],['recover','RECOVER FLIGHT RECORDS','Take the flight recorder case.'],['plant','SABOTAGE FUEL PUMPS','Rig the fuel pump control panel.'],['download','DOWNLOAD COMMAND INTELLIGENCE','Stay at the server to copy the command archive.'],['defend','HOLD EXTRACTION CORRIDOR','Defend the corridor override until extraction is cleared.']]
 ];
 for (let index=0; index<MISSIONS.length; index++) {
  const m=MISSIONS[index];
- m.steps=m.steps.map((step,i)=>{const [kind,action,hint]=operationPlans[index][i];return {...step,kind,action,hint,duration:({recover:1,switch:3,plant:7,download:14,defend:25})[kind],radius:kind==='defend'?14:2.4};});
+ m.steps=m.steps.map((step,i)=>{const [kind,action,hint]=operationPlans[index][i];return {...step,kind,action,hint,duration:({recover:1,switch:3,plant:7,download:14,defend:25,sweep:0})[kind],radius:kind==='defend'?14:kind==='sweep'?10:2.4};});
  m.actions=m.steps.map(step=>step.action);m.action=m.actions[0];
 }
 export function objectiveSafe(step,position,livingGuards=0,starting=false){
  if(!step)return false;
  const radius=starting?2.4:step.radius;
  return Math.hypot(position.x-step.position[0],position.z-step.position[1])<=radius&&(step.kind==='defend'||livingGuards===0);
+}
+export function sweepReady(step,player,guards){
+ if(step?.kind!=='sweep'||!player)return false;
+ const [x,z]=step.position;
+ return Math.hypot(player.x-x,player.z-z)<=step.radius&&
+  !guards.some(g=>g.hp>0&&Math.hypot(g.x-x,g.z-z)<14);
+}
+export function completeSweep(state,player,guards){
+ if(state.status!=='active'||state.intel)return state;
+ const m=MISSIONS[state.index],step=state.step||0;
+ if(!sweepReady(m.steps[step],player,guards))return state;
+ return {...state,step:step+1,intel:step+1===m.steps.length};
 }
 // Cutting the railway compound's CCTV gives the team a tangible stealth advantage.
 // Later missions use their existing standard detection distance.
@@ -67,7 +79,8 @@ export function missionWalls([x, z]) {
 // These layouts define both visible walls and authoritative collision.
 export function installationLayout(m,site=0){
  const [x,z]=m.sites[site],index=MISSIONS.indexOf(m);
- if(index===0)return {w:10,d:8,doorOffset:0,windowXs:[-3,3],theme:'freight',walls:missionWalls([x,z])};
+ if(index===0&&site!==2)return {w:10,d:8,doorOffset:0,windowXs:[-3,3],theme:'freight',walls:missionWalls([x,z])};
+ if(index===0){const w=16,d=12,half=w/2,depth=d/2;return {w,d,doorOffset:0,windowXs:[-5,5],theme:'freight-checkpoint',walls:[[x-half,z,.35,3.5,d],[x+half,z,.35,3.5,d],[x,z-depth,w,3.5,.35],[x-4.5,z+depth,7,3.5,.35],[x+4.5,z+depth,7,3.5,.35],[x-4.5,z,7,3.5,.25],[x+4.5,z,7,3.5,.25]]};}
  const w=index===1?12:index===2?10:14,d=index===2?12:index===1?10:8,half=w/2,depth=d/2,doorOffset=index===3?4:0;
  const walls=[[x-half,z,.35,3.5,d],[x+half,z,.35,3.5,d],[x,z-depth,w,3.5,.35]];
  const left=half+doorOffset-1,right=half-doorOffset-1;
@@ -91,6 +104,7 @@ export function blocked(x, z, boxes, r = 0.38) {
 export function interactMission(state, position, livingGuards) {
  if(state.status!=='active')return state;
  const m=MISSIONS[state.index],step=state.step||0;
+ if(step<m.steps.length&&m.steps[step].kind==='sweep')return state;
  const point=step<m.steps.length?m.steps[step].position:m.extract;
  if(step<m.steps.length ? !objectiveSafe(m.steps[step],position,livingGuards) : Math.hypot(position.x-point[0],position.z-point[1])>2.4||livingGuards>0)return state;
  if(step<m.steps.length)return {...state,step:step+1,intel:step+1===m.steps.length};

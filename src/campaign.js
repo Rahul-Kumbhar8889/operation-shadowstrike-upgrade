@@ -12,6 +12,7 @@ import { createEnvironmentTextures,createTerrainTexture } from "./environmentTex
 import {
   MISSIONS,
   objectiveSafe,
+  completeSweep,
   guardSightRange,
   guardResponseMultiplier,
   activeOperationEffect,
@@ -177,6 +178,10 @@ export function createCampaign({
       part(new THREE.CylinderGeometry(.5,.5,1.35,14),0x647267,0,.72,0);
       for(const dx of [-.14,0,.14])part(new THREE.CylinderGeometry(.07,.07,.38,8),0x794334,dx,1,.52);
       indicator=part(new THREE.BoxGeometry(.25,.14,.06),0x50efb1,0,1.05,.62);
+    }else if(step.kind==='sweep'){
+      const zone=part(new THREE.TorusGeometry(step.radius,.07,6,64),0xd4a65c,0,.08,0);zone.rotation.x=Math.PI/2;
+      part(new THREE.BoxGeometry(1.5,.8,.55),0x526150,0,.42,0);
+      indicator=part(new THREE.SphereGeometry(.1,8,6),0x50efb1,0,.91,0);
     }else{
       part(new THREE.BoxGeometry(1.15,.7,.7),0x3b5148,0,.4,0);
       part(new THREE.CylinderGeometry(.025,.025,1.9,6),0x919d91,.4,1.65,0);
@@ -320,7 +325,7 @@ export function createCampaign({
     const destination=current?current.position:m.extract;
     const navigation=objectiveNavigation(player.position,destination);
     const extractionHint=network?'Both living players must gather within 4m. Clear nearby guards and press E.':'Clear nearby guards and press E.';
-    q('.objective').textContent=state.status==='failed'?'MISSION FAILED':state.status==='complete'?'OPERATION COMPLETE':current?`OBJECTIVE ${step+1}/${m.steps.length}: ${current.action} • ${navigation.distance}m ${navigation.direction} • ${current.hint} • Press E at the marked equipment • ${left} guards alive`:`REACH EXTRACTION • ${navigation.distance}m ${navigation.direction} • ${extractionHint}`;
+    q('.objective').textContent=state.status==='failed'?'MISSION FAILED':state.status==='complete'?'OPERATION COMPLETE':current?`OBJECTIVE ${step+1}/${m.steps.length}: ${current.action} • ${navigation.distance}m ${navigation.direction} • ${current.hint} • ${current.kind==='sweep'?'Enter the marked zone; no interaction needed':'Press E at the marked equipment'} • ${left} guards alive`:`REACH EXTRACTION • ${navigation.distance}m ${navigation.direction} • ${extractionHint}`;
     if(task && state.status==='active')q('.objective').textContent=`${current.action} • ${Math.ceil(task.remaining)}s • Stay within ${current.radius}m${current.kind==='defend'?' — KEEP FIGHTING; defend the relay':' — nearby threats interrupt'}`;
     if(revive&&state.status==='active')q('.objective').textContent=reviveMessage(revive,getPlayerId());
     q('.start').hidden=!network||state.status!=='waiting'||networkWaiting;
@@ -401,6 +406,11 @@ export function createCampaign({
     if(network){for(const e of enemies)if(e.hp>0)e.model.userData.updateAnimation?.(dt,!!e.networkMoving,false);return;}
     if (state.status !== "active" || !running) return;
     time += dt;
+    const activeStep=MISSIONS[state.index].steps[state.step||0];
+    if(!state.intel&&activeStep?.kind==='sweep'){
+      const next=completeSweep(state,player.position,enemies.map(e=>({x:e.model.position.x,z:e.model.position.z,hp:e.hp})));
+      if(next!==state){state=next;playObjective();message('CHECKPOINT SECURED — NEXT INSTALLATION MARKED');}
+    }
     smokeClouds=smokeClouds.filter(c=>c.expires>Date.now());
     if(task){const m=MISSIONS[state.index],point=m.steps[state.step||0].position;
       const safe=objectiveSafe(m.steps[state.step||0],player.position,enemies.filter(e=>e.hp>0&&e.model.position.distanceTo(player.position)<12).length);
@@ -500,6 +510,7 @@ export function createCampaign({
   function interact(){
     if(network){networkAction('interact');return;}
     if(state.status!=='active'||task)return;
+    if(!state.intel&&MISSIONS[state.index].steps[state.step||0]?.kind==='sweep'){message('ENTER THE CHECKPOINT ZONE AND CLEAR NEARBY GUARDS');return;}
     const m=MISSIONS[state.index],point=m.steps[state.step||0]?.position||m.extract;
     const threats=enemies.filter(e=>e.hp>0&&e.model.position.distanceTo(player.position)<12).length;
     if(state.intel ? Math.hypot(player.position.x-point[0],player.position.z-point[1])>2.4||threats>0 : !objectiveSafe(m.steps[state.step||0],player.position,threats,true)){message('Press E within 2.4m of the marked equipment. Clear nearby guards for collection, switches, charges and downloads.');return;}

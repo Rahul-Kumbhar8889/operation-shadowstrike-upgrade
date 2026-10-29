@@ -1,4 +1,4 @@
-import {installationLayout,guardSpawn,objectiveSafe,guardSightRange,guardResponseMultiplier,MISSIONS,campaignObstacles,blocked,CAMPAIGN_MAX_HP,GUARD_BULLET_DAMAGE} from '../shared/campaign.js';
+import {installationLayout,guardSpawn,objectiveSafe,sweepReady,guardSightRange,guardResponseMultiplier,MISSIONS,campaignObstacles,blocked,CAMPAIGN_MAX_HP,GUARD_BULLET_DAMAGE} from '../shared/campaign.js';
 import {smokeBlocks,blastDamage} from '../shared/equipment.js';
 import {guardStep,findGuardCover} from '../shared/guardTactics.js';
 export function createCoop(index=0){
@@ -16,6 +16,7 @@ export function interactCoop(room,id){
  const downed=[...room.players].find(([otherId,other])=>otherId!==id&&!other.alive&&Math.hypot(other.position.x-p.position.x,other.position.z-p.position.z)<=3);
  if(downed){if(!(p.equipment?.injection>0))return false;c.revive={id,targetId:downed[0],remaining:4,hp:p.hp};return true;}
  if(c.task)return false;
+ if(!c.intel&&m.steps[c.step]?.kind==='sweep')return false;
  const point=c.intel?m.extract:m.steps[c.step].position;
  const threats=c.guards.filter(g=>g.hp>0&&Math.hypot(g.x-p.position.x,g.z-p.position.z)<12).length;
  if(c.intel ? Math.hypot(p.position.x-point[0],p.position.z-point[1])>2.4||threats>0 : !objectiveSafe(m.steps[c.step],p.position,threats,true))return false;
@@ -30,6 +31,8 @@ export function updateCoop(room,dt,now,rayBox,emit){
  }
  const living=[...room.players].filter(([,p])=>p.alive);
  if(!living.length){c.status='failed';c.task=null;c.revive=null;c.revision++;return;}
+ const current=MISSIONS[c.index].steps[c.step];
+ if(!c.intel&&current?.kind==='sweep'&&living.some(([,p])=>sweepReady(current,p.position,c.guards))){c.step++;c.intel=c.step===MISSIONS[c.index].steps.length;c.revision++;}
  if(c.task){const p=room.players.get(c.task.id),point=MISSIONS[c.index].steps[c.step].position;
   if(!p?.alive||!objectiveSafe(MISSIONS[c.index].steps[c.step],p.position,c.guards.filter(g=>g.hp>0&&Math.hypot(g.x-p.position.x,g.z-p.position.z)<12).length))c.task=null;
   else {c.task.remaining-=dt;if(c.task.remaining<=0){c.step++;c.intel=c.step===MISSIONS[c.index].steps.length;c.task=null;c.revision++;}}

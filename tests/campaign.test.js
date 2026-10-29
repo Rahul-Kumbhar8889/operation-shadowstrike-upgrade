@@ -5,6 +5,7 @@ import {
   installationLayout,
   blocked,
   interactMission,
+  completeSweep,
 } from "../shared/campaign.js";
 for (let index = 0; index < MISSIONS.length; index++) {
   const m = MISSIONS[index];
@@ -17,6 +18,11 @@ for (let index = 0; index < MISSIONS.length; index++) {
     let progress=initial;
     for(let step=0;step<m.steps.length;step++){
       if(step+1<m.steps.length)assert.equal(interactMission(progress,pos(m.steps[step+1].position),0),progress,'cannot skip objectives');
+      if(m.steps[step].kind==='sweep'){
+        const p=pos(m.steps[step].position);assert.equal(interactMission(progress,p,0),progress,'cannot complete sweep with interaction');
+        assert.equal(completeSweep(progress,p,[{...p,hp:100}]),progress,'living guards block sweep');
+        progress=completeSweep(progress,p,[]);assert.equal(progress.step,step+1);continue;
+      }
       if(m.steps[step].kind==='defend')assert.equal(interactMission(progress,pos(m.steps[step].position),1).step,step+1,'defense permits enemy presence');
       else assert.equal(interactMission(progress,pos(m.steps[step].position),1),progress,'nearby guard blocks equipment interaction');
       progress=interactMission(progress,pos(m.steps[step].position),0);
