@@ -99,14 +99,20 @@ export function missionWalls([x, z]) {
     [x - 2, z, 5.5, 3.5, 0.25],
   ];
 }
+// West-side entry is split into two walls, leaving a 2.8m tactical access gap.
+export function westEntryWalls(x,z,w,d){
+ const wallX=x-w/2,gapCenter=z+2,gapHalf=1.4,min=z-d/2,max=z+d/2;
+ const a=gapCenter-gapHalf-min,b=max-(gapCenter+gapHalf);
+ return [[wallX,min+a/2,.35,3.5,a],[wallX,max-b/2,.35,3.5,b]];
+}
 // These layouts define both visible walls and authoritative collision.
 export function installationLayout(m,site=0){
  const [x,z]=m.sites[site],index=MISSIONS.indexOf(m);
  if(index===0&&site!==2)return {w:10,d:8,doorOffset:0,windowXs:[-3,3],theme:'freight',walls:missionWalls([x,z])};
- if(index===0){const w=16,d=12,half=w/2,depth=d/2;return {w,d,doorOffset:0,windowXs:[-5,5],theme:'freight-checkpoint',walls:[[x-half,z,.35,3.5,d],[x+half,z,.35,3.5,d],[x,z-depth,w,3.5,.35],[x-4.5,z+depth,7,3.5,.35],[x+4.5,z+depth,7,3.5,.35],[x-4.5,z,7,3.5,.25],[x+4.5,z,7,3.5,.25]]};}
- if(index===1&&site===3){const w=16,d=12,half=w/2,depth=d/2;return {w,d,doorOffset:0,windowXs:[-5,5],theme:'communications',walls:[[x-half,z,.35,3.5,d],[x+half,z,.35,3.5,d],[x,z-depth,w,3.5,.35],[x-4.5,z+depth,7,3.5,.35],[x+4.5,z+depth,7,3.5,.35],[x-4.5,z,7,3.5,.25],[x+4.5,z,7,3.5,.25]]};}
- if(index===2&&site===2){const w=18,d=16,half=w/2,depth=d/2;return {w,d,doorOffset:0,windowXs:[-6,6],theme:'detention',walls:[[x-half,z,.35,3.5,d],[x+half,z,.35,3.5,d],[x,z-depth,w,3.5,.35],[x-5,z+depth,8,3.5,.35],[x+5,z+depth,8,3.5,.35],[x-5,z,8,3.5,.25],[x+5,z,8,3.5,.25]]};}
- if(index===3&&site===4){const w=20,d=16,half=w/2,depth=d/2;return {w,d,doorOffset:4,windowXs:[-6,0],theme:'fuel-depot',walls:[[x-half,z,.35,3.5,d],[x+half,z,.35,3.5,d],[x,z-depth,w,3.5,.35],[x-3.5,z+depth,13,3.5,.35],[x+8,z+depth,4,3.5,.35],[x-3.5,z,13,3.5,.25]]};}
+ if(index===0){const w=16,d=12,half=w/2,depth=d/2;return {w,d,doorOffset:0,sideEntry:2,windowXs:[-5,5],theme:'freight-checkpoint',walls:[...westEntryWalls(x,z,w,d),[x+half,z,.35,3.5,d],[x,z-depth,w,3.5,.35],[x-4.5,z+depth,7,3.5,.35],[x+4.5,z+depth,7,3.5,.35],[x-4.5,z,7,3.5,.25],[x+4.5,z,7,3.5,.25]]};}
+ if(index===1&&site===3){const w=16,d=12,half=w/2,depth=d/2;return {w,d,doorOffset:0,sideEntry:2,windowXs:[-5,5],theme:'communications',walls:[...westEntryWalls(x,z,w,d),[x+half,z,.35,3.5,d],[x,z-depth,w,3.5,.35],[x-4.5,z+depth,7,3.5,.35],[x+4.5,z+depth,7,3.5,.35],[x-4.5,z,7,3.5,.25],[x+4.5,z,7,3.5,.25]]};}
+ if(index===2&&site===2){const w=18,d=16,half=w/2,depth=d/2;return {w,d,doorOffset:0,sideEntry:2,windowXs:[-6,6],theme:'detention',walls:[...westEntryWalls(x,z,w,d),[x+half,z,.35,3.5,d],[x,z-depth,w,3.5,.35],[x-5,z+depth,8,3.5,.35],[x+5,z+depth,8,3.5,.35],[x-5,z,8,3.5,.25],[x+5,z,8,3.5,.25]]};}
+ if(index===3&&site===4){const w=20,d=16,half=w/2,depth=d/2;return {w,d,doorOffset:4,sideEntry:2,windowXs:[-6,0],theme:'fuel-depot',walls:[...westEntryWalls(x,z,w,d),[x+half,z,.35,3.5,d],[x,z-depth,w,3.5,.35],[x-3.5,z+depth,13,3.5,.35],[x+8,z+depth,4,3.5,.35],[x-3.5,z,13,3.5,.25]]};}
  const w=index===1?12:index===2?10:14,d=index===2?12:index===1?10:8,half=w/2,depth=d/2,doorOffset=index===3?4:0;
  const walls=[[x-half,z,.35,3.5,d],[x+half,z,.35,3.5,d],[x,z-depth,w,3.5,.35]];
  const left=half+doorOffset-1,right=half-doorOffset-1;

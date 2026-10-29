@@ -32,3 +32,15 @@ test('fuel depot has a reachable escape route from the charge',()=>{
   for(const [dx,dz] of [[.5,0],[-.5,0],[0,.5],[0,-.5]]){const px=a+dx,pz=b+dz;if(Math.abs(px-x)<=layout.w/2+5&&Math.abs(pz-z)<=layout.d/2+7&&!blocked(px,pz,layout.walls))queue.push([px,pz]);}}
  assert.ok(escaped,'there is a route beyond the blast radius');
 });
+test('expanded mission sites provide a second traversable route to every objective',()=>{
+ for(const [index,site] of [[0,2],[1,3],[2,2],[3,4]]){
+  const m=MISSIONS[index],layout=installationLayout(m,site),[x,z]=m.sites[site],boxes=campaignObstacles(m);
+  const goals=m.steps[site].kind==='dual'?dualNodes(m.steps[site]):[m.steps[site].position];
+  assert.equal(layout.sideEntry,2);const start=[x-layout.w/2-1,z+layout.sideEntry];assert.equal(blocked(...start,boxes),false);
+  const queue=[start],seen=new Set();const reached=new Set();
+  for(let i=0;i<queue.length&&reached.size<goals.length;i++){const [a,b]=queue[i],key=`${Math.round((a-x)*2)},${Math.round((b-z)*2)}`;if(seen.has(key))continue;seen.add(key);
+   goals.forEach((goal,n)=>{if(Math.hypot(a-goal[0],b-goal[1])<1)reached.add(n);});
+   for(const [dx,dz] of [[.5,0],[-.5,0],[0,.5],[0,-.5]]){const px=a+dx,pz=b+dz;if(Math.abs(px-x)<=layout.w/2+3&&Math.abs(pz-z)<=layout.d/2+3&&!blocked(px,pz,boxes))queue.push([px,pz]);}}
+  assert.equal(reached.size,goals.length,`${m.name} side entry reaches its objective`);
+ }
+});

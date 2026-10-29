@@ -218,6 +218,12 @@ export function createCampaign({
     }
     mesh(new THREE.BoxGeometry(2.25,.12,.45),0x353e38,x+layout.doorOffset,3.1,front+.1);
     for(const dx of [-1.12,1.12])mesh(new THREE.BoxGeometry(.12,3.1,.45),0x414a43,x+layout.doorOffset+dx,1.55,front+.1);
+    if(layout.sideEntry!==undefined){
+      const sideX=x-layout.w/2-.06,sideZ=z+layout.sideEntry;
+      mesh(new THREE.BoxGeometry(.4,.12,2.8),0x353e38,sideX,3.1,sideZ);
+      for(const dz of [-1.4,1.4])mesh(new THREE.BoxGeometry(.4,3.1,.12),0x414a43,sideX,1.55,sideZ+dz);
+      const guide=mesh(new THREE.PlaneGeometry(2.4,.18),0xc5b061,sideX-1,.055,sideZ);guide.rotation.x=-Math.PI/2;
+    }
     mesh(new THREE.CylinderGeometry(.27,.3,.6,10),0x7a8177,x+2,4,z);
     for(const dx of layout.windowXs){
       mesh(new THREE.BoxGeometry(1.45,.85,.07),0x263e42,x+dx,1.7,front+.19);
