@@ -2,7 +2,7 @@ import {loadMissionMaterials,applyMissionMaterial} from './missionMaterials.js';
 import {applyDeathPose} from './deathPose.js';
 import {addGuardDetail} from './guardDetail.js';
 import {objectiveNavigation} from './navigation.js';
-import {reviveMessage} from './missionFeedback.js';
+import {reviveMessage,teammateMessage} from './missionFeedback.js';
 import {guardStep,findGuardCover} from '../shared/guardTactics.js';
 import { blastDamage, smokeBlocks } from '../shared/equipment.js';
 import { playGunshotAt, playObjective } from './combatEffects.js';
@@ -39,6 +39,7 @@ export function createCampaign({
   blood=()=>{},
   demolition=()=>{},
   getPlayerId=()=>null,
+  getTeammates=()=>[],
 }) {
   const textures=createEnvironmentTextures();textures.ground.dispose();textures.ground=createTerrainTexture();textures.ground.repeat.set(15,15);
   const baseAtmosphere={background:scene.background,fog:scene.fog?.clone(),lights:scene.children.filter(o=>o.isLight).map(light=>({light,color:light.color.clone(),intensity:light.intensity}))};
@@ -60,7 +61,7 @@ export function createCampaign({
   panel.id = "missionPanel";
   panel.hidden = true;
   panel.innerHTML =
-    '<small>SHADOWSTRIKE / FIELD OPERATIONS</small><h2></h2><p class="brief"></p><p class="objective"></p><p class="operation-effect" hidden></p><progress class="task-progress" max="1" value="0" hidden aria-label="Objective action progress"></progress><details class="operation-plan"><summary>OPERATION PLAN</summary><ol></ol></details><canvas class="radar" width="280" height="150" aria-label="Tactical map: blue player, red guards, green terminal, cyan extraction"></canvas><p>E interact • V camera • Esc release cursor</p><button class="start" hidden>START CO-OP MISSION</button><button class="next" hidden>NEXT OPERATION</button><button class="retry">RESTART MISSION</button><button class="exit">RETURN TO MENU</button>';
+    '<small>SHADOWSTRIKE / FIELD OPERATIONS</small><h2></h2><p class="brief"></p><p class="objective"></p><p class="teammate-status" hidden></p><p class="operation-effect" hidden></p><progress class="task-progress" max="1" value="0" hidden aria-label="Objective action progress"></progress><details class="operation-plan"><summary>OPERATION PLAN</summary><ol></ol></details><canvas class="radar" width="280" height="150" aria-label="Tactical map: blue player, yellow teammate, red guards, green terminal, cyan extraction"></canvas><p>E interact • V camera • Esc release cursor</p><button class="start" hidden>START CO-OP MISSION</button><button class="next" hidden>NEXT OPERATION</button><button class="retry">RESTART MISSION</button><button class="exit">RETURN TO MENU</button>';
   document.body.append(panel);
   const failure = document.createElement("section");
   failure.id = "missionFailure";
@@ -326,6 +327,9 @@ export function createCampaign({
   function paint() {
     const m = MISSIONS[state.index],
       left = enemies.filter((e) => e.hp > 0).length;
+    const teammates=network?getTeammates():[],teammate=teammates[0],teamLabel=q('.teammate-status');
+    teamLabel.hidden=!teammate;teamLabel.textContent=teammate?teammateMessage(player.position,teammate):'';
+    teamLabel.classList.toggle('down',teammate?.alive===false);
     q("h2").textContent = m.name;
     q(".brief").textContent = m.brief;
     const step=state.step||0, current=m.steps[step];
@@ -390,6 +394,10 @@ export function createCampaign({
         );
         ctx.fill();
       }
+    for(const teammate of teammates){
+      ctx.fillStyle=teammate.alive===false?'#ff775e':'#ffe18a';ctx.fillRect(px(teammate.x)-3,pz(teammate.z)-3,6,6);
+      if(teammate.alive===false){ctx.strokeStyle='#ffe9de';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(px(teammate.x)-5,pz(teammate.z));ctx.lineTo(px(teammate.x)+5,pz(teammate.z));ctx.moveTo(px(teammate.x),pz(teammate.z)-5);ctx.lineTo(px(teammate.x),pz(teammate.z)+5);ctx.stroke();}
+    }
     ctx.save();
     ctx.translate(px(player.position.x), pz(player.position.z));
     ctx.rotate(-player.rotation.y);
