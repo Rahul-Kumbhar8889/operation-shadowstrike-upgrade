@@ -36,6 +36,10 @@ for (let index = 0; index < MISSIONS.length; index++) {
         assert.equal(advanceRendezvous(m.steps[step],null,8,[p],[]),0);
         progress={...progress,step:step+1,intel:step+1===m.steps.length};continue;
       }
+      if(m.steps[step].kind==='timedcharge'){
+        assert.equal(interactMission(progress,pos(m.steps[step].position),0),progress,'charge needs a fuse');
+        progress={...progress,step:step+1,intel:step+1===m.steps.length};continue;
+      }
       if(m.steps[step].kind==='defend')assert.equal(interactMission(progress,pos(m.steps[step].position),1).step,step+1,'defense permits enemy presence');
       else assert.equal(interactMission(progress,pos(m.steps[step].position),1),progress,'nearby guard blocks equipment interaction');
       progress=interactMission(progress,pos(m.steps[step].position),0);

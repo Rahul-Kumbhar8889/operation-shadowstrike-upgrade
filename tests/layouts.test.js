@@ -24,3 +24,11 @@ test('nightfall detention yard has a clear entrance and objective position',()=>
  assert.equal(layout.w,18);assert.equal(layout.d,16);assert.equal(blocked(...point,campaignObstacles(m)),false);
  for(let dz=layout.d/2+1;dz>=-2;dz-=.25)assert.equal(blocked(x,z+dz,layout.walls),false,'center entrance remains traversable');
 });
+test('fuel depot has a reachable escape route from the charge',()=>{
+ const m=MISSIONS[3],site=4,layout=installationLayout(m,site),[x,z]=m.sites[site],point=m.steps[site].position;
+ assert.equal(layout.w,20);assert.equal(layout.d,16);assert.equal(blocked(...point,campaignObstacles(m)),false);
+ const queue=[point],seen=new Set();let escaped=false;
+ for(let i=0;i<queue.length;i++){const [a,b]=queue[i],key=`${Math.round((a-x)*2)},${Math.round((b-z)*2)}`;if(seen.has(key))continue;seen.add(key);if(Math.hypot(a-point[0],b-point[1])>=13){escaped=true;break;}
+  for(const [dx,dz] of [[.5,0],[-.5,0],[0,.5],[0,-.5]]){const px=a+dx,pz=b+dz;if(Math.abs(px-x)<=layout.w/2+5&&Math.abs(pz-z)<=layout.d/2+7&&!blocked(px,pz,layout.walls))queue.push([px,pz]);}}
+ assert.ok(escaped,'there is a route beyond the blast radius');
+});

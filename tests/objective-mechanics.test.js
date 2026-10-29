@@ -3,7 +3,7 @@ import {MISSIONS,objectiveSafe,guardSightRange,guardResponseMultiplier,activeOpe
 import {createCoop,interactCoop,updateCoop,alertCoopGuards} from '../server/coop.js';
 test('four operations contain distinct equipment mechanics with explicit task rules',()=>{
  const kinds=new Set(MISSIONS.flatMap(m=>m.steps.map(s=>s.kind)));
- assert.deepEqual([...kinds].sort(),['defend','download','dual','plant','recover','rendezvous','sweep','switch']);
+ assert.deepEqual([...kinds].sort(),['defend','download','dual','plant','recover','rendezvous','sweep','switch','timedcharge']);
  for(const m of MISSIONS){assert.ok(m.steps.some(s=>s.kind==='defend'));for(const s of m.steps){assert.ok(s.hint.length>20);assert.ok(s.kind==='sweep'?s.duration===0:s.duration>0);}}
 });
 test('defense starts at equipment but permits fighting and moving inside the hold area',()=>{

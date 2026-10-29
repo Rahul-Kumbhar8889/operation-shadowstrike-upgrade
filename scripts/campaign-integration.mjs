@@ -24,6 +24,7 @@ try{
     campaign.interact();
     if(step===0){player.position.x+=4;campaign.update(.1,true);ok(panel.querySelector('.objective').textContent.includes(`OBJECTIVE 1/`),'leaving terminal interrupts action');player.position.x-=4;campaign.interact();}
     campaign.update(m.steps[step].duration-.1,true);ok(panel.querySelector('.objective').textContent.includes('Stay within'),'action cannot finish early');campaign.update(.11,true);
+    if(m.steps[step].kind==='timedcharge'){ok(panel.querySelector('.objective').textContent.includes('CHARGE ARMED'),'charge requires retreat');player.position.x+=20;campaign.update(10.1,true);}
    }
    ok(panel.querySelector('.objective').textContent.includes('REACH EXTRACTION'),'all objectives lead to extraction');player.position.set(...[m.extract[0],0,m.extract[1]]);campaign.interact();ok(!campaign.running,'extraction completes operation');ok(panel.querySelector('.next').hidden===(index<3),'intermediate missions advance automatically; final campaign offers replay');results.push(`${m.name}: timed objectives, interruption, combat and extraction`);campaign.update(index<3?5.1:20,false);ok(panel.querySelector('h2').textContent===MISSIONS[Math.min(index+1,3)].name,'automatic next operation, with final campaign stop');
   }

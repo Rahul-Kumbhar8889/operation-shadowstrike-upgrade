@@ -14,7 +14,9 @@ for(let index=0;index<MISSIONS.length;index++)test(`co-op ${index+1}: ordered sh
   if(m.steps[step].kind==='rendezvous'){b.position={x,z};assert.equal(interactCoop(r,'a'),false);updateCoop(r,m.steps[step].duration+.1,Date.now(),noWall,()=>{});assert.equal(c.step,step+1);continue;}
   assert.ok(interactCoop(r,'a'));
   if(step===0){a.position.x+=4;updateCoop(r,.1,Date.now(),noWall,()=>{});assert.equal(c.task,null);a.position.x-=4;assert.ok(interactCoop(r,'a'));}
-  updateCoop(r,m.steps[step].duration-.1,Date.now(),noWall,()=>{});assert.equal(c.step,step);updateCoop(r,.11,Date.now(),noWall,()=>{});assert.equal(c.step,step+1);
+  updateCoop(r,m.steps[step].duration-.1,Date.now(),noWall,()=>{});assert.equal(c.step,step);updateCoop(r,.11,Date.now(),noWall,()=>{});
+  if(m.steps[step].kind==='timedcharge'){assert.equal(c.step,step);assert.equal(coopSnapshot(r).chargeRemaining,10);a.position={x:x+20,z};b.position={x:x+20,z};updateCoop(r,10,Date.now(),noWall,()=>{});}
+  assert.equal(c.step,step+1);
  }
  assert.ok(c.intel);a.position={x:m.extract[0],z:m.extract[1]};assert.equal(interactCoop(r,'a'),false,'teammate must reach extraction');b.position={...a.position};assert.ok(interactCoop(r,'a'));assert.equal(c.status,'complete');assert.equal(coopSnapshot(r).guards.filter(g=>g.hp>0).length,0);assert.equal(createCoop(index).status,'waiting');
 });
@@ -46,6 +48,17 @@ test('detention yard requires all living players and resets its hold when interr
  b.position.x=x+20;updateCoop(r,.1,0,noWall,()=>{});assert.equal(c.holdRemaining,null,'leaving resets timer');
  b.position.x=x+2;c.guards=[{id:0,x:x+5,z,homeX:x+5,homeZ:z,hp:100,phase:0,lastFire:0}];updateCoop(r,1,0,noWall,()=>{});assert.equal(c.holdRemaining,null,'nearby guards prevent the hold');
  c.guards[0].hp=0;updateCoop(r,8,0,noWall,()=>{});assert.equal(c.step,3);assert.equal(coopSnapshot(r).holdRemaining,null);
+});
+test('fuel charge fuse is shared, pauses without a teammate, and damages only players inside blast radius',()=>{
+ const r=room(3),c=r.coop;c.status='active';c.step=4;c.guards=[];const step=MISSIONS[3].steps[4],[x,z]=step.position,a=r.players.get('a'),b=r.players.get('b'),events=[];
+ a.position={x,z};b.position={x:x+20,z};assert.ok(interactCoop(r,'a'));updateCoop(r,step.duration,0,noWall,()=>{});assert.equal(c.step,4);assert.equal(coopSnapshot(r).chargeRemaining,10);assert.equal(interactCoop(r,'a'),false);
+ updateCoop(r,4,0,noWall,()=>{});assert.equal(c.chargeRemaining,6);r.players.delete('b');updateCoop(r,10,0,noWall,()=>{});assert.equal(c.chargeRemaining,6,'fuse pauses when teammate disconnects');
+ r.players.set('b',b);updateCoop(r,6,0,noWall,(...e)=>events.push(e));assert.equal(c.step,5);assert.equal(a.hp,750);assert.equal(b.hp,1000);assert.equal(events.filter(([name])=>name==='player-hit').length,1);
+});
+test('lethal fuel detonation downs both players and fails the operation',()=>{
+ const r=room(3),c=r.coop;c.status='active';c.step=4;c.guards=[];c.chargeRemaining=.1;const [x,z]=MISSIONS[3].steps[4].position,events=[];
+ for(const p of r.players.values()){p.position={x,z};p.hp=250;}
+ updateCoop(r,.1,0,noWall,(...event)=>events.push(event));assert.equal(c.status,'failed');assert.equal(events.filter(([name])=>name==='coop-player-down').length,2);assert.ok([...r.players.values()].every(p=>!p.alive));
 });
 test('all co-op spawns and terminals have valid shared collision; blast hits guards, not teammates',()=>{
  for(let i=0;i<MISSIONS.length;i++){const r=room(i),c=r.coop;for(const p of r.players.values())assert.equal(blocked(p.position.x,p.position.z,c.boxes),false);for(const step of MISSIONS[i].steps)assert.equal(blocked(...step.position,c.boxes),false);c.status='active';const g=c.guards[0];coopBlast(r,{x:g.x,z:g.z},'a',noWall,()=>{});assert.equal(g.hp,0);assert.equal(r.players.get('a').hp,1000);assert.equal(r.players.get('b').hp,1000);}
