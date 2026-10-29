@@ -1,6 +1,7 @@
 import {loadMissionMaterials,applyMissionMaterial} from './missionMaterials.js';
 import {applyDeathPose} from './deathPose.js';
 import {addGuardDetail} from './guardDetail.js';
+import {objectiveNavigation} from './navigation.js';
 import { blastDamage, smokeBlocks } from '../shared/equipment.js';
 import { playGunshotAt, playObjective } from './combatEffects.js';
 import * as THREE from "three";
@@ -304,9 +305,9 @@ export function createCampaign({
 
     for(let i=0;i<objectiveProps.length;i++){const prop=objectiveProps[i],done=i<step;if(done&&!completedEffects.has(i)){completedEffects.add(i);if(prop.kind==='plant'){const [x,z]=m.steps[i].position;if(!network||networkSynced)demolition(new THREE.Vector3(x,1,z));for(const o of prop.parts)o.material.color.multiplyScalar(.25);}}for(const o of prop.parts)o.visible=!(done&&(prop.kind==='recover'||prop.kind==='plant'&&o===prop.indicator));prop.indicator.material.color.set(done?0x66716c:i===step?0x50efb1:0xcb984c);prop.indicator.material.emissive.set(done?0x000000:i===step?0x1f926a:0x392400);}
     const destination=current?current.position:m.extract;
-    const distance=Math.round(Math.hypot(player.position.x-destination[0],player.position.z-destination[1]));
+    const navigation=objectiveNavigation(player.position,destination);
     const extractionHint=network?'Both living players must gather within 4m. Clear nearby guards and press E.':'Clear nearby guards and press E.';
-    q('.objective').textContent=state.status==='failed'?'MISSION FAILED':state.status==='complete'?'OPERATION COMPLETE':current?`OBJECTIVE ${step+1}/${m.steps.length}: ${current.action} • ${distance}m away • ${current.hint} • Press E at the marked equipment • ${left} guards alive`:`REACH EXTRACTION • ${distance}m away • ${extractionHint}`;
+    q('.objective').textContent=state.status==='failed'?'MISSION FAILED':state.status==='complete'?'OPERATION COMPLETE':current?`OBJECTIVE ${step+1}/${m.steps.length}: ${current.action} • ${navigation.distance}m ${navigation.direction} • ${current.hint} • Press E at the marked equipment • ${left} guards alive`:`REACH EXTRACTION • ${navigation.distance}m ${navigation.direction} • ${extractionHint}`;
     if(task && state.status==='active')q('.objective').textContent=`${current.action} • ${Math.ceil(task.remaining)}s • Stay within ${current.radius}m${current.kind==='defend'?' — KEEP FIGHTING; defend the relay':' — nearby threats interrupt'}`;
     if(revive&&state.status==='active')q('.objective').textContent=`REVIVING TEAMMATE • ${Math.ceil(revive.remaining)}s • Stay within 3m; taking damage interrupts. Costs one injection.`;
     q('.start').hidden=!network||state.status!=='waiting'||networkWaiting;
@@ -365,10 +366,9 @@ export function createCampaign({
     ctx.fillStyle = "#acbdba";
     ctx.font = "10px monospace";
     const point = state.intel ? m.extract : m.steps[state.step||0].position;
-    const bearing=(Math.atan2(point[0]-player.position.x,-(point[1]-player.position.z))*180/Math.PI+360)%360;
-    const direction=['N','NE','E','SE','S','SW','W','NW'][Math.round(bearing/45)%8];
+    const {distance:mapDistance,direction,degrees}=objectiveNavigation(player.position,point);
     ctx.fillText(
-      `${state.intel ? "EXTRACTION" : m.steps[state.step||0].kind.toUpperCase()} ${Math.round(Math.hypot(player.position.x - point[0], player.position.z - point[1]))}m ${direction} ${Math.round(bearing)}° | N ↑`,
+      `${state.intel ? "EXTRACTION" : m.steps[state.step||0].kind.toUpperCase()} ${mapDistance}m ${direction} ${degrees}° | N ↑`,
       8,
       142,
     );
