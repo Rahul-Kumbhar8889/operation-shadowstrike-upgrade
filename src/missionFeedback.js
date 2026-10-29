@@ -8,6 +8,15 @@ export function teammateMessage(player,teammate){
  const {distance,direction}=objectiveNavigation(player,[teammate.x,teammate.z]);
  return teammate.alive===false?`TEAMMATE DOWN • ${distance}m ${direction} • Revive within 3m using E and one injection`:`TEAMMATE • ${distance}m ${direction}`;
 }
+export function extractionMessage(player,point,guards,teammate,network){
+ const distance=Math.hypot(player.x-point[0],player.z-point[1]);
+ if(distance>2.4)return 'MOVE INTO THE CENTER OF THE EXTRACTION ZONE';
+ const nearby=guards.filter(g=>g.hp>0&&Math.hypot(g.x-player.x,g.z-player.z)<12).length;
+ if(nearby)return `CLEAR ${nearby} NEARBY GUARD${nearby===1?'':'S'} WITHIN 12m`;
+ if(network&&!teammate)return 'WAIT FOR YOUR TEAMMATE TO JOIN';
+ if(network&&teammate.alive!==false&&Math.hypot(teammate.x-point[0],teammate.z-point[1])>4)return 'WAIT FOR YOUR TEAMMATE WITHIN 4m OF EXTRACTION';
+ return 'EXTRACTION READY — PRESS E';
+}
 const interactionMessages={
  player_down:'YOU ARE DOWN — WAIT FOR A TEAMMATE TO REVIVE YOU',
  need_teammate:'WAIT FOR YOUR TEAMMATE TO JOIN THE ROOM',

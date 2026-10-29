@@ -2,7 +2,7 @@ import {loadMissionMaterials,applyMissionMaterial} from './missionMaterials.js';
 import {applyDeathPose} from './deathPose.js';
 import {addGuardDetail} from './guardDetail.js';
 import {objectiveNavigation} from './navigation.js';
-import {reviveMessage,teammateMessage} from './missionFeedback.js';
+import {reviveMessage,teammateMessage,extractionMessage} from './missionFeedback.js';
 import {guardStep,findGuardCover} from '../shared/guardTactics.js';
 import { blastDamage, smokeBlocks } from '../shared/equipment.js';
 import { playGunshotAt, playObjective } from './combatEffects.js';
@@ -307,6 +307,15 @@ export function createCampaign({
       const x=-5,z=55-n*22,w=5,h=3,d=12;
       const item={x,z,w,h,d,mesh:mesh(new THREE.BoxGeometry(w,h,d),0x4d594c,x,h/2,z)};obstacles.push(item);colliders.push(item);
     }
+    // Ground-only landing-zone markings make extraction visible without changing collision.
+    const [ex,ez]=m.extract;
+    const pad=mesh(new THREE.CircleGeometry(4.6,40),0x39433f,ex,.025,ez);pad.rotation.x=-Math.PI/2;
+    const outline=mesh(new THREE.RingGeometry(4.15,4.28,40),0xd0cba5,ex,.035,ez);outline.rotation.x=-Math.PI/2;
+    for(const dx of [-.8,.8]){const mark=mesh(new THREE.PlaneGeometry(.22,2.8),0xe4ddbd,ex+dx,.04,ez);mark.rotation.x=-Math.PI/2;}
+    const bar=mesh(new THREE.PlaneGeometry(1.8,.22),0xe4ddbd,ex,.04,ez);bar.rotation.x=-Math.PI/2;
+    for(const [dx,dz] of [[-3.3,-3.3],[-3.3,3.3],[3.3,-3.3],[3.3,3.3]]){
+      const light=mesh(new THREE.SphereGeometry(.12,8,6),0x63d6de,ex+dx,.15,ez+dz);light.material.emissive.setHex(0x23777a);
+    }
     beacon = mesh(
       new THREE.TorusGeometry(2, 0.09, 8, 48),
       0x57d7ff,
@@ -358,6 +367,10 @@ export function createCampaign({
     const navigation=objectiveNavigation(player.position,destination);
     const extractionHint=network?'Both living players must gather within 4m. Clear nearby guards and press E.':'Clear nearby guards and press E.';
     q('.objective').textContent=state.status==='failed'?'MISSION FAILED':state.status==='complete'?'OPERATION COMPLETE':current?`OBJECTIVE ${step+1}/${m.steps.length}: ${current.action} • ${navigation.distance}m ${navigation.direction} • ${current.hint} • ${['sweep','rendezvous'].includes(current.kind)?'Enter the marked zone; no interaction needed':'Press E at the marked equipment'} • ${left} guards alive`:`REACH EXTRACTION • ${navigation.distance}m ${navigation.direction} • ${extractionHint}`;
+    if(!current&&state.status==='active'){
+      const guards=enemies.map(e=>({x:e.model.position.x,z:e.model.position.z,hp:e.hp}));
+      q('.objective').textContent+=` • ${extractionMessage(player.position,m.extract,guards,teammate,network)}`;
+    }
     if(current?.kind==='dual'&&state.status==='active')q('.objective').textContent+=` • DATA RACKS ${dualDone.length}/2`;
     if(current?.kind==='rendezvous'&&state.status==='active'&&holdRemaining!==null)q('.objective').textContent=`SECURE DETENTION YARD • ${Math.ceil(holdRemaining)}s • Keep all living squad members inside and guards outside the zone.`;
     if(task && state.status==='active')q('.objective').textContent=`${current.action} • ${Math.ceil(task.remaining)}s • Stay within ${current.radius}m${current.kind==='defend'?' — KEEP FIGHTING; defend the relay':' — nearby threats interrupt'}`;
