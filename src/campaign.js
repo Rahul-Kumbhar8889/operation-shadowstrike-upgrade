@@ -505,7 +505,10 @@ export function createCampaign({
       if(!network)return;
       const previous=state.step;state={index:snapshot.index,status:snapshot.status,step:snapshot.step,intel:snapshot.intel};networkWaiting=snapshot.waiting;task=snapshot.task;revive=snapshot.revive||null;transitionRemaining=snapshot.transitionRemaining??null;
       for(const data of snapshot.guards){const e=enemies[data.id];if(!e)continue;e.networkMoving=Math.hypot(e.model.position.x-data.x,e.model.position.z-data.z)>.01;const killed=e.hp>0&&data.hp<=0;e.hp=data.hp;if(killed){e.deathAge=0;blood(new THREE.Vector3(data.x,1.1,data.z));}e.model.position.x=data.x;e.model.position.z=data.z;e.model.rotation.y=data.rotation;if(e.hp>0){e.model.position.y=0;e.model.rotation.x=0;}}
-      if(networkSynced&&previous!==state.step)playObjective();
+      if(networkSynced&&state.step>previous){
+        playObjective();
+        message(state.intel?'ALL OBJECTIVES SECURED — BOTH PLAYERS GO TO EXTRACTION':'OBJECTIVE COMPLETE — NEXT INSTALLATION MARKED');
+      }
       paint();networkSynced=true;
       if(state.status==='failed'){panel.hidden=true;failure.hidden=false;document.exitPointerLock?.();}
       else {panel.hidden=false;failure.hidden=true;}

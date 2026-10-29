@@ -685,7 +685,7 @@ function showMessage(message) {
 
   messageTimer = setTimeout(() => {
     $('#message').textContent = '';
-  }, 1300);
+  }, Math.max(1800, Math.min(5000, message.length * 65)));
 }
 
 function showHitMarker() {
@@ -1210,9 +1210,9 @@ socket.on('player-respawned', (data) => {
 });
 
 socket.on('coop-state',snapshot=>{if(!multiplayerActive||!coopMode)return;campaign.sync(snapshot);updateMouseHint();});
-socket.on('coop-guard-hit',data=>{if(!coopMode)return;if(data.position)campaign.guardImpact(data.position);if(data.shooterId===socket.id){showHitMarker();playHitConfirmation();}});
+socket.on('coop-guard-hit',data=>{if(!coopMode)return;if(data.position)campaign.guardImpact(data.position);if(data.shooterId===socket.id){showHitMarker();playHitConfirmation();if(data.hp===0){playElimination();showMessage('GUARD NEUTRALIZED');}}});
 socket.on('coop-guard-fired',data=>{if(!coopMode)return;const origin=new THREE.Vector3(data.origin.x,data.origin.y,data.origin.z),direction=new THREE.Vector3(data.target.x,data.target.y,data.target.z).sub(origin);bulletTracer(origin,direction.clone().normalize(),direction.length());if(origin.distanceTo(soldier.position)<80)playGunshotAt('assault',data.origin,soldier.position,yaw);});
-socket.on('coop-player-down',data=>{if(!coopMode)return;if(data.id===socket.id){alive=false;hp=0;firstPerson=false;reloading=false;reloadToken++;fireHeld=false;updateHUD();showMessage('YOU ARE DOWN — teammate can revive you: approach within 3m, press E, stay safe for 4s. Costs one injection.');}else{const remote=remotePlayers.get(data.id);if(remote){remote.alive=false;remote.deathAge=0;}}});
+socket.on('coop-player-down',data=>{if(!coopMode)return;if(data.id===socket.id){alive=false;hp=0;firstPerson=false;reloading=false;reloadToken++;fireHeld=false;updateHUD();showMessage('YOU ARE DOWN — teammate can revive you: approach within 3m, press E, stay safe for 4s. Costs one injection.');}else{const remote=remotePlayers.get(data.id);if(remote){remote.alive=false;remote.deathAge=0;}showMessage('TEAMMATE DOWN — REACH WITHIN 3m AND PRESS E TO REVIVE');}});
 socket.on('coop-player-revived',data=>{
  if(!coopMode)return;
  if(data.reviverId===socket.id)inventory={...data.equipment};
