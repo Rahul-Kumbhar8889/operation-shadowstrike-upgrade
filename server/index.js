@@ -458,6 +458,19 @@ function resetCoopRoom(code,room,index,autoStart=false){
 io.on('connection', (socket) => {
   console.log('Connected:', socket.id);
 
+  // Voice signaling is relayed only to the other member of the same room.
+  socket.on('voice-ready', data => {
+    const code=socket.data.roomCode,room=rooms.get(code);
+    if(!room?.players.has(socket.id)||typeof data?.enabled!=='boolean')return;
+    socket.to(code).emit('voice-ready',{from:socket.id,enabled:data.enabled,reply:data.reply===true});
+  });
+  socket.on('voice-signal', data => {
+    const code=socket.data.roomCode,room=rooms.get(code);
+    if(!room?.players.has(socket.id)||!data||typeof data!=='object')return;
+    if(data.description){const d=data.description;if(!['offer','answer'].includes(d.type)||typeof d.sdp!=='string'||d.sdp.length>65536)return;socket.to(code).emit('voice-signal',{from:socket.id,description:{type:d.type,sdp:d.sdp}});}
+    else if(data.candidate){const c=data.candidate;if(typeof c.candidate!=='string'||c.candidate.length>2048||JSON.stringify(c).length>4096)return;socket.to(code).emit('voice-signal',{from:socket.id,candidate:c});}
+  });
+
   // ==============================================
   // CREATE ROOM
   // ==============================================

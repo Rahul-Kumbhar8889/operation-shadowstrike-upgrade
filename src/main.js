@@ -1,5 +1,6 @@
 import {getQuality,setQuality,applyRendererQuality} from './graphics.js';
 import {createWeaponModel} from './weaponModels.js';
+import {createVoiceChat} from './voiceChat.js';
 import {syncRemoteLife} from './remoteLife.js';
 import {applyDeathPose} from './deathPose.js';
 import {createTouchControls} from './touchControls.js';
@@ -108,8 +109,12 @@ app.innerHTML = `
     <span id="roomLabel">ROOM: ------</span>
     <span id="playerCount">PLAYERS: 1/2</span>
     <button id="copyCode">COPY CODE</button>
+    <button id="voiceButton" aria-pressed="false">ENABLE VOICE</button>
+    <button id="voiceOff">VOICE OFF</button>
+    <span id="voiceStatus" role="status">Voice off</span>
     <button id="leaveRoom">LEAVE</button>
   </div>
+  <audio id="voiceAudio" autoplay playsinline></audio>
 
   <div id="scoreboard" class="hidden">
     <div class="score-title">LIVE SCOREBOARD</div><p id="roundStatus">FIRST TO 5 KILLS</p><button id="rematch" class="hidden">READY FOR REMATCH</button>
@@ -557,12 +562,16 @@ function updateWeaponHUD() {
 function updateHUD() {
   updateWeaponHUD();
   $('#equipmentHUD').textContent=`G  FRAG ${inventory.frag}  •  B  SMOKE ${inventory.smoke}  •  H  INJECTION ${inventory.injection}`;
-
-  $('#stats').textContent =
+  const lowHealth=alive&&hp<=(campaign.active?250:25);
+  const lowAmmo=!reloading&&ammo<=Math.ceil(WEAPONS[currentWeapon].magazine*.2);
+  const warning=reloading?'RELOADING':ammo===0?'EMPTY — RELOAD':lowHealth?(inventory.injection>0?'LOW HEALTH — USE INJECTION':'LOW HEALTH — NO INJECTIONS'):lowAmmo?'LOW AMMO — RELOAD':'';
+  const stats=$('#stats');stats.classList.toggle('critical',lowHealth||ammo===0);
+  stats.textContent =
     `HP: ${hp} | ` +
     `${WEAPONS[currentWeapon].short}: ` +
     `${ammo}/${WEAPONS[currentWeapon].magazine} | ` +
-    (campaign.active ? (coopMode?'CO-OP OPERATION':'STORY OPERATION') : `${multiplayerActive?'DRILL GUARDS':'TRAINING GUARDS'}: ${targetKills}/5`);
+    (campaign.active ? (coopMode?'CO-OP OPERATION':'STORY OPERATION') : `${multiplayerActive?'DRILL GUARDS':'TRAINING GUARDS'}: ${targetKills}/5`) +
+    (warning ? ` | ${warning}` : '');
 }
 
 function selectWeapon(id, notifyServer = true) {
@@ -770,6 +779,8 @@ const lobbyConnection = createLobbyConnection({
   onStatus(message) { $('#roomStatus').textContent = message; },
 });
 const socket = lobbyConnection.socket;
+const voiceChat=createVoiceChat({socket,button:$('#voiceButton'),audio:$('#voiceAudio'),status:$('#voiceStatus')});
+$('#voiceOff').onclick=()=>voiceChat.stop();
 
 function updateScoreboard(players) {
   $('#playerCount').textContent = `PLAYERS: ${players.length}/2${players.length<2?(coopMode?' — WAITING FOR TEAMMATE':' — WAITING FOR OPPONENT'):(coopMode?' — CO-OP SQUAD':' — PVP LIVE')}`;
@@ -914,6 +925,7 @@ $('#copyCode').onclick = async () => {
 };
 
 function leaveGame() {
+  voiceChat.stop();
   campaign.stop();firstPerson=false;soldier.rotation.set(0,0,0);soldier.position.set(0,0,0);
   currentRoom = null;
   multiplayerActive = false;coopMode=false;
@@ -987,6 +999,7 @@ socket.on('player-moved', (data) => {
 
 socket.on('player-left', (id) => {
   if (!multiplayerActive) return;
+  voiceChat.peerLeft();
 
   const remote = remotePlayers.get(id);
 
