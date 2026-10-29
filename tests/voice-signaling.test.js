@@ -10,7 +10,8 @@ test('voice signaling stays inside the sender room and ignores invalid payloads'
  const sockets=[];
  try{
   for(let i=0;i<3;i++){const s=io(url,{transports:['websocket'],reconnection:false});sockets.push(s);await once(s,'connect');}
-  const [a,b,outsider]=sockets;const room=await a.timeout(2000).emitWithAck('create-room');await b.timeout(2000).emitWithAck('join-room',room.code);await outsider.timeout(2000).emitWithAck('create-room');
+  const [a,b,outsider]=sockets;assert.equal((await outsider.timeout(2000).emitWithAck('voice-config')).ok,false);const room=await a.timeout(2000).emitWithAck('create-room');await b.timeout(2000).emitWithAck('join-room',room.code);await outsider.timeout(2000).emitWithAck('create-room');
+  const config=await a.timeout(2000).emitWithAck('voice-config');assert.equal(config.ok,true);assert.equal(config.relayAvailable,false);assert.ok(config.iceServers.length);
   let leaked=0,invalid=0;outsider.on('voice-ready',()=>leaked++);outsider.on('voice-signal',()=>leaked++);b.on('voice-signal',()=>invalid++);
   const ready=once(b,'voice-ready');a.emit('voice-ready',{enabled:true});assert.deepEqual((await ready)[0],{from:a.id,enabled:true,reply:false});
   const retry=once(b,'voice-ready');a.emit('voice-ready',{enabled:true,restart:true});assert.deepEqual((await retry)[0],{from:a.id,enabled:true,reply:false,restart:true});

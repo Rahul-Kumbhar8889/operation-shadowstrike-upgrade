@@ -1,3 +1,4 @@
+import {makeVoiceConfig} from './voiceConfig.js';
 import {alertCoopGuards,createCoop,coopSnapshot,coopSpawn,canCoopAct,updateCoop,interactCoop,hurtGuard,coopBlast} from './coop.js';
 import {MISSIONS,blocked,CAMPAIGN_MAX_HP} from '../shared/campaign.js';
 import {EQUIPMENT,createEquipment,throwLanding,blastDamage,healHealth} from '../shared/equipment.js';
@@ -459,6 +460,14 @@ io.on('connection', (socket) => {
   console.log('Connected:', socket.id);
 
   // Voice signaling is relayed only to the other member of the same room.
+  socket.on('voice-config', callback => {
+    if(typeof callback!=='function')return;
+    const room=rooms.get(socket.data.roomCode);
+    if(!room?.players.has(socket.id))return callback({ok:false});
+    const now=Date.now();if(now-(socket.data.lastVoiceConfig||0)<1000)return callback({ok:false});
+    socket.data.lastVoiceConfig=now;
+    callback({ok:true,...makeVoiceConfig({turnUrls:process.env.TURN_URLS,turnSecret:process.env.TURN_SHARED_SECRET,userId:socket.id,now})});
+  });
   socket.on('voice-ready', data => {
     const code=socket.data.roomCode,room=rooms.get(code);
     if(!room?.players.has(socket.id)||typeof data?.enabled!=='boolean')return;

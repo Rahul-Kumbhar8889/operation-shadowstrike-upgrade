@@ -1,5 +1,9 @@
 # Tactical missions release
 
+## Optional voice relay
+
+Voice uses direct peer-to-peer connections with STUN by default. Some networks require a separately hosted TURN relay; none is provisioned here. For a coturn relay configured for REST shared-secret authentication, set `TURN_URLS` to comma-separated `turn:` / `turns:` URLs and `TURN_SHARED_SECRET` to its secret on the backend only. The server issues one-hour credentials to room members without revealing the shared secret. Public room creation is not user authentication: protect the relay with provider quotas and rate limits. Do not put the secret in frontend variables, source control or chat. Cost and availability depend on the relay provider; verify voice on separate networks after configuration.
+
 This branch adds an original three-operation single-player campaign to the existing two-player multiplayer game. It is inspired by tactical infiltration and arena combat; it does not include Project IGI or Counter-Strike files.
 
 ## Recommended Render deployment: one Web Service
