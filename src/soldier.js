@@ -1,4 +1,3 @@
-import {attachRiggedOperator} from './riggedOperator.js';
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -120,6 +119,6 @@ export function createSoldier(color=0x52654b) {
   root.userData.setAimDirection=direction=>{if(!direction?.lengthSq())return;root.updateWorldMatrix(true,false);const local=direction.clone().normalize().applyQuaternion(root.getWorldQuaternion(new THREE.Quaternion()).invert());aimRig.rotation.y=THREE.MathUtils.clamp(Math.atan2(-local.x,-local.z),-.75,.75);aimRig.rotation.x=THREE.MathUtils.clamp(Math.atan2(local.y,Math.hypot(local.x,local.z)),-.65,.65);head.rotation.y=aimRig.rotation.y*.6;};
   root.userData.playRecoil=()=>{recoil=1;};
   root.userData.updateAnimation=(dt,moving=false,sprint=false)=>{dt=Math.min(dt,.05);blend=THREE.MathUtils.damp(blend,moving?1:0,10,dt);walk+=dt*(sprint?11:7);for(let i=0;i<2;i++){const phase=walk+i*Math.PI;legs[i].hip.rotation.x=Math.sin(phase)*.55*blend;legs[i].knee.rotation.x=Math.max(0,-Math.sin(phase))*.85*blend;}body.position.y=Math.abs(Math.sin(walk*2))*.018*blend;aimRig.position.y=1.46+body.position.y+Math.sin(walk*.45)*.002;for(let i=0;i<arms.length;i++){arms[i].arm.rotation.z=Math.sin(walk+i*Math.PI)*.025*blend;arms[i].elbow.rotation.x=Math.sin(walk)*.025*blend;}recoil=Math.max(0,recoil-dt*9);rifle.position.z=-.23+recoil*.065;rifle.rotation.x=recoil*.055;};
-  if(typeof window!=='undefined'){root.userData.modelState='loading';root.userData.visualReady=attachRiggedOperator(root,camouflage()).then(ready=>{if(!ready)root.userData.modelState='fallback';return ready;}).catch(()=>{root.userData.modelState='fallback';for(const child of root.userData.hiddenParts||[])child.visible=true;root.userData.hiddenParts=new Set();for(const child of root.userData.aimRig.children)if(/Shoulder$/.test(child.name))child.visible=true;const visual=root.getObjectByName('RiggedOperator');if(visual)root.remove(visual);return false;});}
+
   return root;
 }

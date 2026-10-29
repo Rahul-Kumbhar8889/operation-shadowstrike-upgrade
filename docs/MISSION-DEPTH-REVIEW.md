@@ -30,8 +30,8 @@ Run `npm test`, `npm run build`, and the campaign, co-op, mobile and hybrid brow
 
 ## Review limits
 
-The new rigged operator uses a licensed model and retargeted animations; it is stylized, not a photorealistic scan. The original procedural operator remains the fallback if model loading fails. The maps still use the existing compound layout and basic AI steering, not a navigation mesh. No driveable vehicles, hostage escort, persistent save, destructible buildings or physically simulated ragdolls are included. Automated campaign traversal verifies progression but does not replace a full human playthrough or physical phone testing. Render deployment is intentionally pending approval.
+The rigged operator is temporarily disabled after oversized rendering was reported; the original procedural operator is active while the rig is investigated. The maps still use the existing compound layout and basic AI steering, not a navigation mesh. No driveable vehicles, hostage escort, persistent save, destructible buildings or physically simulated ragdolls are included. Automated campaign traversal verifies progression but does not replace a full human playthrough or physical phone testing. Render deployment is intentionally pending approval.
 
 ## Current changes
 
-Four distinct interior layouts now share collision with the server, guards are moved out of blocked spawn locations, and soldier locomotion, firing, reload and death use the rigged operator where available. Low, Balanced and High graphics choices control shadows, resolution and guard detail. Automated checks pass; real-device testing remains required.
+Four distinct interior layouts now share collision with the server, guards are moved out of blocked spawn locations, and soldiers use the existing procedural model until rigged rendering is corrected. Low, Balanced and High graphics choices control shadows, resolution and guard detail. Automated checks pass; real-device testing remains required.
