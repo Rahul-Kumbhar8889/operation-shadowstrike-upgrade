@@ -499,6 +499,12 @@ function clearRemotePlayers() {
 
 let scoped = false;
 
+function toggleScope() {
+  if (currentWeapon !== 'sniper') return;
+  scoped = !scoped;
+  updateScope();
+}
+
 function updateScope() {
   const active =
     scoped &&
@@ -509,7 +515,7 @@ function updateScope() {
   $('#scopeOverlay').style.display = active ? 'block' : 'none';
 
   $('#scopeButton').textContent =
-    currentWeapon === 'sniper' ? 'PRESS Z TO TOGGLE SNIPER SCOPE' : '';
+    currentWeapon === 'sniper' ? 'Z / SCOPE: TOGGLE SNIPER ZOOM' : '';
 
   camera.fov = active ? 25 : 65;
   camera.updateProjectionMatrix();
@@ -1451,10 +1457,10 @@ const touchControls=createTouchControls({canvas:renderer.domElement,keys,
  look(dx,dy){yaw-=dx*.004;pitch=THREE.MathUtils.clamp(pitch-dy*.004,-1.1,1.1);},
  fire(){fireHeld=true;shoot();},stopFire(){fireHeld=false;},reload,nextWeapon,
  interact:()=>campaign.active&&campaign.interact(),equipment:useEquipment,
- camera:()=>{firstPerson=!firstPerson;},menu:leaveGame,
+ camera:()=>{firstPerson=!firstPerson;},scope:toggleScope,menu:leaveGame,
  active:()=>gameActive()&&alive&&(!campaign.active||campaign.running||campaign.canExplore)&&!document.querySelector('#instructions')?.open});
 const instructions=document.createElement('dialog');instructions.id='instructions';
-instructions.innerHTML=`<h2>FIELD MANUAL</h2><p><strong>Multiplayer:</strong> create a room and share its six-character code. Your friend opens this same link and joins. First to five kills wins. Respawn takes three seconds; both players must agree to rematch.</p><p><strong>Co-op:</strong> select an operation and Create Co-op Mission Room. Both players join by code, then Start Mission. Guard damage and objectives are shared by the server; teammates cannot hurt each other. Both living players must reach extraction. To revive a downed teammate, approach within 3m and press E. Stay close for 4 seconds without taking damage; one injection restores your teammate to 350HP. If both die, restart together.<br><strong>Story:</strong> choose one of four solo operations. Follow the marked equipment and press E within 2.4m. Collect cases, cut switches, plant charges and download server data after clearing guards within 12m. Defense objectives keep running under enemy fire: stay within the marked 14m area for 25 seconds. Use cover and keep fighting. Both living co-op players must reach extraction; the next operation starts automatically. Open OPERATION PLAN for the full checklist.</p><p><strong>Desktop:</strong> WASD move, Shift sprint, mouse look, click fire, R reload, 1–9 weapons, G frag, B smoke, H heal, V view, M menu, Esc release mouse. Z scopes the sniper.</p><p><strong>Phone:</strong> landscape works best. Left joystick moves; drag the scene to look. Hold FIRE for automatic weapons. Buttons reload, switch guns, use equipment and interact.</p><p>Three healing injections per life: +350 story HP or +35 multiplayer HP, capped at maximum. Smoke conceals but does not stop bullets. Frag grenades hurt enemies; self damage is disabled.</p><p><a href="/assets/characters/CREDITS.txt" target="_blank" rel="noopener">Character and animation credits</a></p><button autofocus>CLOSE MANUAL</button>`;
+instructions.innerHTML=`<h2>FIELD MANUAL</h2><p><strong>Multiplayer:</strong> create a room and share its six-character code. Your friend opens this same link and joins. First to five kills wins. Respawn takes three seconds; both players must agree to rematch.</p><p><strong>Co-op:</strong> select an operation and Create Co-op Mission Room. Both players join by code, then Start Mission. Guard damage and objectives are shared by the server; teammates cannot hurt each other. Both living players must reach extraction. To revive a downed teammate, approach within 3m and press E. Stay close for 4 seconds without taking damage; one injection restores your teammate to 350HP. If both die, restart together.<br><strong>Story:</strong> choose one of four solo operations. Follow the marked equipment and press E within 2.4m. Collect cases, cut switches, plant charges and download server data after clearing guards within 12m. Defense objectives keep running under enemy fire: stay within the marked 14m area for 25 seconds. Use cover and keep fighting. Both living co-op players must reach extraction; the next operation starts automatically. Open OPERATION PLAN for the full checklist.</p><p><strong>Desktop:</strong> WASD move, Shift sprint, mouse look, click fire, R reload, 1–9 weapons, G frag, B smoke, H heal, V view, M menu, Esc release mouse. Z scopes the sniper.</p><p><strong>Phone:</strong> landscape works best. Left joystick moves; drag the scene to look. Hold FIRE for automatic weapons. Buttons reload, switch guns, use equipment and interact. SCOPE toggles sniper zoom.</p><p>Three healing injections per life: +350 story HP or +35 multiplayer HP, capped at maximum. Smoke conceals but does not stop bullets. Frag grenades hurt enemies; self damage is disabled.</p><p><a href="/assets/characters/CREDITS.txt" target="_blank" rel="noopener">Character and animation credits</a></p><button autofocus>CLOSE MANUAL</button>`;
 instructions.insertAdjacentHTML('afterbegin','<p class="manual-notice">Opening this manual does not pause an active game. Find cover first.</p>');
 instructions.querySelector('button').insertAdjacentHTML('beforebegin','<p><strong>Special objectives:</strong> Checkpoint sweep starts automatically when you enter the zone and guards nearby are cleared. For the detention yard, all living squad members must hold the zone for 8 seconds with no nearby guards; leaving or an enemy entering resets the timer. Data racks must each be secured separately.</p>');
 document.body.append(instructions);instructions.querySelector('button').onclick=()=>instructions.close();
@@ -1500,7 +1506,7 @@ renderer.domElement.addEventListener('contextmenu', (event) =>
 );
 
 document.addEventListener('pointerlockchange', () => {fireHeld=false;updateMouseHint();});
-window.addEventListener('pointerup',()=>{fireHeld=false;});
+window.addEventListener('pointerup',event=>{if(event.pointerType!=='touch')fireHeld=false;});
 
 document.addEventListener('mousemove', (event) => {
   if (!mouseLocked() || !gameActive()) return;
@@ -1543,10 +1549,7 @@ window.addEventListener('keydown', (event) => {
   if (event.code === 'Digit8') selectWeapon('battle');
   if (event.code === 'Digit9') selectWeapon('marksman');
 
-  if (event.code === 'KeyZ' && currentWeapon === 'sniper') {
-    scoped = !scoped;
-    updateScope();
-  }
+  if (event.code === 'KeyZ' && !event.repeat) toggleScope();
 });
 
 window.addEventListener('keyup', (event) => {
