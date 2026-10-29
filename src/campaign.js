@@ -2,6 +2,7 @@ import {loadMissionMaterials,applyMissionMaterial} from './missionMaterials.js';
 import {applyDeathPose} from './deathPose.js';
 import {addGuardDetail} from './guardDetail.js';
 import {objectiveNavigation} from './navigation.js';
+import {reviveMessage} from './missionFeedback.js';
 import {guardStep,findGuardCover} from '../shared/guardTactics.js';
 import { blastDamage, smokeBlocks } from '../shared/equipment.js';
 import { playGunshotAt, playObjective } from './combatEffects.js';
@@ -27,6 +28,7 @@ export function createCampaign({
   tracer,
   blood=()=>{},
   demolition=()=>{},
+  getPlayerId=()=>null,
 }) {
   const textures=createEnvironmentTextures();textures.ground.dispose();textures.ground=createTerrainTexture();textures.ground.repeat.set(15,15);
   const baseAtmosphere={background:scene.background,fog:scene.fog?.clone(),lights:scene.children.filter(o=>o.isLight).map(light=>({light,color:light.color.clone(),intensity:light.intensity}))};
@@ -310,7 +312,7 @@ export function createCampaign({
     const extractionHint=network?'Both living players must gather within 4m. Clear nearby guards and press E.':'Clear nearby guards and press E.';
     q('.objective').textContent=state.status==='failed'?'MISSION FAILED':state.status==='complete'?'OPERATION COMPLETE':current?`OBJECTIVE ${step+1}/${m.steps.length}: ${current.action} • ${navigation.distance}m ${navigation.direction} • ${current.hint} • Press E at the marked equipment • ${left} guards alive`:`REACH EXTRACTION • ${navigation.distance}m ${navigation.direction} • ${extractionHint}`;
     if(task && state.status==='active')q('.objective').textContent=`${current.action} • ${Math.ceil(task.remaining)}s • Stay within ${current.radius}m${current.kind==='defend'?' — KEEP FIGHTING; defend the relay':' — nearby threats interrupt'}`;
-    if(revive&&state.status==='active')q('.objective').textContent=`REVIVING TEAMMATE • ${Math.ceil(revive.remaining)}s • Stay within 3m; taking damage interrupts. Costs one injection.`;
+    if(revive&&state.status==='active')q('.objective').textContent=reviveMessage(revive,getPlayerId());
     q('.start').hidden=!network||state.status!=='waiting'||networkWaiting;
     q('.retry').hidden=network&&state.status!=='failed'&&state.status!=='complete';
     if(network && (networkWaiting||state.status==='waiting'))q('.objective').textContent=networkWaiting?'CO-OP: WAITING FOR SECOND PLAYER — safe exploration available; share your room code':'SQUAD READY — press START CO-OP MISSION or Enter';

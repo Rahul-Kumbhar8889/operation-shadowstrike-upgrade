@@ -383,7 +383,7 @@ scene.add(soldier);
 
 const remotePlayers = new Map();
 let firstPerson = false;
-const campaign = createCampaign({scene, obstacles, player:soldier, message:showMessage, tracer:bulletTracer, blood:position=>combatFX.bloodImpact(position), demolition:position=>combatFX.explosion(position),
+const campaign = createCampaign({scene, obstacles, player:soldier, getPlayerId:()=>socket.id, message:showMessage, tracer:bulletTracer, blood:position=>combatFX.bloodImpact(position), demolition:position=>combatFX.explosion(position),
   onDamage(damage) {
     if (!alive) return;
     hp=Math.max(0,hp-damage);flashDamage();updateHUD();
