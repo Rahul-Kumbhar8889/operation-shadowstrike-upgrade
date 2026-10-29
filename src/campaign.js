@@ -1,7 +1,7 @@
 import {loadMissionMaterials,applyMissionMaterial} from './missionMaterials.js';
 import {applyDeathPose} from './deathPose.js';
 import {addGuardDetail} from './guardDetail.js';
-import {objectiveNavigation} from './navigation.js';
+import {missionWaypoint,objectiveNavigation} from './navigation.js';
 import {reviveMessage,teammateMessage,extractionMessage} from './missionFeedback.js';
 import {guardStep,findGuardCover} from '../shared/guardTactics.js';
 import { blastDamage, smokeBlocks } from '../shared/equipment.js';
@@ -56,7 +56,7 @@ export function createCampaign({
     colliders = [],
     time = 0,
     exit = () => {},
-    beacon, surveillanceLamp=null, task=null,revive=null, holdRemaining=null,chargeRemaining=null, dualDone=[], smokeClouds=[],network=false,networkWaiting=false,networkSynced=false,networkAction=()=>{},transitionRemaining=null,objectiveProps=[],completedEffects=new Set();
+    beacon, waypoint=null,waypointRing=null,waypointClock=0,surveillanceLamp=null, task=null,revive=null, holdRemaining=null,chargeRemaining=null, dualDone=[], smokeClouds=[],network=false,networkWaiting=false,networkSynced=false,networkAction=()=>{},transitionRemaining=null,objectiveProps=[],completedEffects=new Set();
   const ray = new THREE.Raycaster(),
     panel = document.createElement("section");
   panel.id = "missionPanel";
@@ -118,7 +118,7 @@ export function createCampaign({
     for(const o of baseWorld)o.visible=false;
     failure.hidden = true;transitionRemaining=null;
     state = { index, status: "active", intel: false, step:0 };
-    time = 0;task=null;revive=null;holdRemaining=null;chargeRemaining=null;dualDone=[];smokeClouds=[];objectiveProps=[];surveillanceLamp=null;completedEffects.clear();
+    time = 0;waypointClock=0;task=null;revive=null;holdRemaining=null;chargeRemaining=null;dualDone=[];smokeClouds=[];objectiveProps=[];surveillanceLamp=null;completedEffects.clear();
     group.visible = true;
     panel.hidden = false;
     const m = MISSIONS[index];
@@ -324,6 +324,11 @@ export function createCampaign({
       m.extract[1],
     );
     beacon.rotation.x = Math.PI / 2;
+    // The suspended marker identifies the active installation without adding a collider.
+    waypoint=mesh(new THREE.OctahedronGeometry(.55,0),0x62edb9,0,6,0);
+    waypoint.material.emissive.setHex(0x197d5c);
+    waypointRing=mesh(new THREE.TorusGeometry(.9,.055,8,32),0x62edb9,0,5.35,0);
+    waypointRing.rotation.x=Math.PI/2;waypointRing.material.emissive.setHex(0x197d5c);
     const hitGeometry=new THREE.CapsuleGeometry(.38,1.04,4,8),hitMaterial=new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false,colorWrite:false});
     enemies = m.guards.map(([a, b], i) => {
       const model = createSoldier(0x75664a);
@@ -363,7 +368,8 @@ export function createCampaign({
 
     for(let i=0;i<objectiveProps.length;i++){const prop=objectiveProps[i],done=i<step,isCharge=['plant','timedcharge'].includes(prop.kind);if(done&&!completedEffects.has(i)){completedEffects.add(i);if(isCharge){const [x,z]=m.steps[i].position;if(!network||networkSynced)demolition(new THREE.Vector3(x,1,z));for(const o of prop.parts)o.material.color.multiplyScalar(.25);}}for(const o of prop.parts)o.visible=!(done&&(prop.kind==='recover'||isCharge&&o===prop.indicator));prop.indicator.material.color.set(done?0x66716c:i===step?0x50efb1:0xcb984c);prop.indicator.material.emissive.set(done?0x000000:i===step?0x1f926a:0x392400);}
     for(let i=0;i<objectiveProps.length;i++)if(objectiveProps[i].kind==='dual')objectiveProps[i].nodeIndicators.forEach((light,n)=>{const done=i<step||i===step&&dualDone.includes(n);light.material.color.set(done?0x66716c:i===step?0x50efb1:0xcb984c);light.material.emissive.set(done?0x000000:i===step?0x1f926a:0x392400);});
-    const destination=current?.kind==='dual'?dualNodes(current)[dualDone.includes(0)?1:0]:current?current.position:m.extract;
+    const target=missionWaypoint(m,step,dualDone),destination=target.position;
+    for(const marker of [waypoint,waypointRing]){marker.visible=state.status==='active';marker.position.x=destination[0];marker.position.z=destination[1];marker.material.color.setHex(target.extraction?0x63d6ef:0x62edb9);}
     const navigation=objectiveNavigation(player.position,destination);
     const extractionHint=network?'Both living players must gather within 4m. Clear nearby guards and press E.':'Clear nearby guards and press E.';
     q('.objective').textContent=state.status==='failed'?'MISSION FAILED':state.status==='complete'?'OPERATION COMPLETE':current?`OBJECTIVE ${step+1}/${m.steps.length}: ${current.action} • ${navigation.distance}m ${navigation.direction} • ${current.hint} • ${['sweep','rendezvous'].includes(current.kind)?'Enter the marked zone; no interaction needed':'Press E at the marked equipment'} • ${left} guards alive`:`REACH EXTRACTION • ${navigation.distance}m ${navigation.direction} • ${extractionHint}`;
@@ -453,6 +459,7 @@ export function createCampaign({
     ).length;
   }
   function update(dt, running) {
+    if(waypoint&&waypointRing){waypointClock+=dt;waypoint.position.y=6+Math.sin(waypointClock*2)*.2;waypoint.rotation.y+=dt;waypointRing.rotation.z+=dt*.6;}
     for(const e of enemies){if(e.hp<=0){e.deathAge=(e.deathAge||0)+dt;applyDeathPose(e.model,e.deathAge);}e.detail(e.model.position.distanceTo(player.position),e.hp<=0,e.deathAge||0);}
     if(!network&&state.status==='complete'&&transitionRemaining!==null){transitionRemaining-=dt;if(transitionRemaining<=0){start(state.index+1);return;}paint();}
     if(network){for(const e of enemies)if(e.hp>0)e.model.userData.updateAnimation?.(dt,!!e.networkMoving,false);return;}

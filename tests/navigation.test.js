@@ -1,6 +1,16 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {objectiveNavigation} from '../src/navigation.js';
+import {missionWaypoint,objectiveNavigation} from '../src/navigation.js';
+import {MISSIONS,dualNodes} from '../shared/campaign.js';
+
+test('world marker tracks active objective, remaining rack and extraction',()=>{
+ const m=MISSIONS[1],step=3,nodes=dualNodes(m.steps[step]);
+ assert.deepEqual(missionWaypoint(m,0).position,m.steps[0].position);
+ assert.deepEqual(missionWaypoint(m,step).position,nodes[0]);
+ assert.deepEqual(missionWaypoint(m,step,[0]).position,nodes[1]);
+ assert.deepEqual(missionWaypoint(m,step,[1]).position,nodes[0]);
+ assert.deepEqual(missionWaypoint(m,m.steps.length),{position:m.extract,extraction:true});
+});
 
 test('objective direction and distance agree with the north-up tactical map',()=>{
   const origin={x:0,z:0};
