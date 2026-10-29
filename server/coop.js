@@ -1,5 +1,6 @@
 import {installationLayout,guardSpawn,objectiveSafe,MISSIONS,campaignObstacles,blocked,CAMPAIGN_MAX_HP,GUARD_BULLET_DAMAGE} from '../shared/campaign.js';
 import {smokeBlocks,blastDamage} from '../shared/equipment.js';
+import {guardStep,findGuardCover} from '../shared/guardTactics.js';
 export function createCoop(index=0){
  const mission=MISSIONS[index],boxes=campaignObstacles(mission);return {index,status:'waiting',step:0,intel:false,task:null,tick:0,revision:0,transitionRemaining:null,revive:null,boxes,guards:mission.guards.map((position,id)=>{const [x,z]=guardSpawn(position,boxes);return {id,x,z,homeX:x,homeZ:z,hp:100,rotation:0,lastFire:0,phase:id*2};})};
 }
@@ -38,9 +39,11 @@ export function updateCoop(room,dt,now,rayBox,emit){
   const defense=c.task&&MISSIONS[c.index].steps[c.step]?.kind==='defend';
   const rally=defense&&living.map(([,p])=>p).find(p=>Math.hypot(p.position.x-g.x,p.position.z-g.z)<60);
   const investigating=g.alertUntil>c.tick&&g.lastKnown;
-  const target=visible?.p.position||rally?.position||investigating||{x:g.homeX+Math.sin(c.tick*.35+g.phase)*2,z:g.homeZ+Math.cos(c.tick*.35+g.phase)*2};
-  let dx=target.x-g.x,dz=target.z-g.z,d=Math.hypot(dx,dz);g.moving=d>(visible?6:.3);if(d)g.rotation=Math.atan2(-dx,-dz);
-  if(g.moving){const step=(visible||rally||investigating?2.2:1)*dt;dx=dx/d*step;dz=dz/d*step;if(!blocked(g.x+dx,g.z,c.boxes))g.x+=dx;if(!blocked(g.x,g.z+dz,c.boxes))g.z+=dz;}
+  if(visible&&g.hp<=50&&!defense&&c.tick>=(g.nextCoverAttempt||0)){g.coverTarget=findGuardCover(g,visible.p.position,c.boxes);g.coverUntil=c.tick+2.5;g.nextCoverAttempt=c.tick+10;}
+  const cover=g.coverTarget&&c.tick<g.coverUntil?g.coverTarget:null;
+  const target=cover||visible?.p.position||rally?.position||investigating||{x:g.homeX+Math.sin(c.tick*.35+g.phase)*2,z:g.homeZ+Math.cos(c.tick*.35+g.phase)*2};
+  let dx=target.x-g.x,dz=target.z-g.z,d=Math.hypot(dx,dz);g.moving=d>(cover?.3:visible?6:.3);if(d)g.rotation=Math.atan2(-dx,-dz);
+  if(g.moving){const next=guardStep(g,target,c.boxes,(visible||rally||investigating||cover?2.2:1)*dt);g.x=next.x;g.z=next.z;}
   if(visible&&now-g.lastFire>=1350){g.lastFire=now;const p=visible.p;p.hp=Math.max(0,p.hp-GUARD_BULLET_DAMAGE);emit('coop-guard-fired',{id:g.id,origin:{x:g.x,y:1.7,z:g.z},target:{...p.position,y:1.7}});emit('player-hit',{targetId:visible.id,shooterId:'guard',hp:p.hp,damage:GUARD_BULLET_DAMAGE});if(!p.hp){p.alive=false;p.deaths++;emit('coop-player-down',{id:visible.id});}}
  }
  if([...room.players.values()].every(p=>!p.alive)){c.status='failed';c.task=null;c.revive=null;c.revision++;}

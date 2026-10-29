@@ -2,6 +2,7 @@ import {loadMissionMaterials,applyMissionMaterial} from './missionMaterials.js';
 import {applyDeathPose} from './deathPose.js';
 import {addGuardDetail} from './guardDetail.js';
 import {objectiveNavigation} from './navigation.js';
+import {guardStep,findGuardCover} from '../shared/guardTactics.js';
 import { blastDamage, smokeBlocks } from '../shared/equipment.js';
 import { playGunshotAt, playObjective } from './combatEffects.js';
 import * as THREE from "three";
@@ -403,7 +404,9 @@ export function createCampaign({
         visible = distance < 23 && lineClear(eye, target);
       const defense=task&&MISSIONS[state.index].steps[state.step||0]?.kind==='defend';
       const rally=defense&&e.model.position.distanceTo(player.position)<60;
-      const dest = visible
+      if(visible&&e.hp<=50&&!defense&&time>=(e.nextCoverAttempt||0)){e.coverTarget=findGuardCover(e.model.position,player.position,boxes);e.coverUntil=time+2.5;e.nextCoverAttempt=time+10;}
+      const cover=e.coverTarget&&time<e.coverUntil?e.coverTarget:null;
+      const dest = cover?new THREE.Vector3(cover.x,0,cover.z):visible
         ? player.position
         : rally?player.position:e.alertUntil>time ? e.lastKnown : e.home
             .clone()
@@ -416,14 +419,11 @@ export function createCampaign({
             );
       const dir = dest.clone().sub(e.model.position);
       dir.y = 0;
-      const moving = dir.length() > (visible ? 6 : 0.3);
+      const moving = dir.length() > (cover ? .3 : visible ? 6 : 0.3);
       if (moving) {
-        dir.normalize();
-        const speed = (visible||rally ? 2.2 : 1) * dt,
-          nx = e.model.position.x + dir.x * speed,
-          nz = e.model.position.z + dir.z * speed;
-        if (!blocked(nx, e.model.position.z, boxes)) e.model.position.x = nx;
-        if (!blocked(e.model.position.x, nz, boxes)) e.model.position.z = nz;
+        const speed = (visible||rally||cover ? 2.2 : 1) * dt;
+        const next=guardStep(e.model.position,dest,boxes,speed);
+        e.model.position.x=next.x;e.model.position.z=next.z;dir.normalize();
       }
       if (dir.lengthSq() > 0) e.model.rotation.y = Math.atan2(-dir.x, -dir.z);
       e.model.userData.updateAnimation?.(dt, moving, false);
