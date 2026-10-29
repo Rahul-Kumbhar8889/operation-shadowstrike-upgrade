@@ -419,10 +419,11 @@ export function createCampaign({
             );
       const dir = dest.clone().sub(e.model.position);
       dir.y = 0;
-      const moving = dir.length() > (cover ? .3 : visible ? 6 : 0.3);
+      let moving = dir.length() > (cover ? .3 : visible ? 6 : 0.3);
       if (moving) {
         const speed = (visible||rally||cover ? 2.2 : 1) * dt;
         const next=guardStep(e.model.position,dest,boxes,speed);
+        moving=Math.hypot(next.x-e.model.position.x,next.z-e.model.position.z)>.00001;
         e.model.position.x=next.x;e.model.position.z=next.z;dir.normalize();
       }
       if (dir.lengthSq() > 0) e.model.rotation.y = Math.atan2(-dir.x, -dir.z);

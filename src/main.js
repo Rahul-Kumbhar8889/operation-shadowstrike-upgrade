@@ -1,6 +1,7 @@
 import {getQuality,setQuality,applyRendererQuality} from './graphics.js';
 import {createWeaponModel} from './weaponModels.js';
 import {createVoiceChat} from './voiceChat.js';
+import {aimDirection} from './aim.js';
 import {syncRemoteLife} from './remoteLife.js';
 import {applyDeathPose} from './deathPose.js';
 import {createTouchControls} from './touchControls.js';
@@ -1251,7 +1252,6 @@ socket.on('disconnect', (reason) => {
 // ==============================================
 
 const raycaster = new THREE.Raycaster();
-const center = new THREE.Vector2(0, 0);
 const UP = new THREE.Vector3(0, 1, 0);
 
 function getFiringOrigin() {
@@ -1259,10 +1259,6 @@ function getFiringOrigin() {
 }
 
 function getAimDirection() {
-  camera.updateMatrixWorld();
-  raycaster.setFromCamera(center, camera);
-  raycaster.far = 100;
-
   const aimObjects = [
     ...campaign.aimMeshes(),
     ...obstacles.map((o) => o.mesh),
@@ -1281,15 +1277,7 @@ function getAimDirection() {
     ground,
   ];
 
-  const hits = raycaster.intersectObjects(aimObjects, false);
-
-  const aimPoint = hits.length
-    ? hits[0].point.clone()
-    : raycaster.ray.origin
-        .clone()
-        .add(raycaster.ray.direction.clone().multiplyScalar(80));
-
-  return aimPoint.sub(getFiringOrigin()).normalize();
+  return aimDirection(camera,getFiringOrigin(),aimObjects,WEAPONS[currentWeapon].range,raycaster);
 }
 
 // ==============================================
