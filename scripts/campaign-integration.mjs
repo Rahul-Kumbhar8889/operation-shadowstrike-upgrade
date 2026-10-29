@@ -20,6 +20,7 @@ try{
     const point=m.steps[step].position;player.position.set(point[0],0,point[1]);
     if(m.steps[step].kind==='sweep'){campaign.update(.1,true);ok(panel.querySelector('.objective').textContent.includes(`OBJECTIVE ${step+2}/`),'entering cleared checkpoint advances the mission');continue;}
     if(m.steps[step].kind==='dual'){for(const [x,z] of dualNodes(m.steps[step])){player.position.set(x,0,z);campaign.interact();campaign.update(m.steps[step].duration+.1,true);}ok(panel.querySelector('.objective').textContent.includes(`OBJECTIVE ${step+2}/`),'both racks advance the mission');continue;}
+    if(m.steps[step].kind==='rendezvous'){campaign.update(m.steps[step].duration+.1,true);ok(panel.querySelector('.objective').textContent.includes(`OBJECTIVE ${step+2}/`),'holding the cleared yard advances the mission');continue;}
     campaign.interact();
     if(step===0){player.position.x+=4;campaign.update(.1,true);ok(panel.querySelector('.objective').textContent.includes(`OBJECTIVE 1/`),'leaving terminal interrupts action');player.position.x-=4;campaign.interact();}
     campaign.update(m.steps[step].duration-.1,true);ok(panel.querySelector('.objective').textContent.includes('Stay within'),'action cannot finish early');campaign.update(.11,true);

@@ -7,6 +7,7 @@ import {
   interactMission,
   completeSweep,
   recordDualNode,
+  advanceRendezvous,
 } from "../shared/campaign.js";
 for (let index = 0; index < MISSIONS.length; index++) {
   const m = MISSIONS[index];
@@ -28,6 +29,12 @@ for (let index = 0; index < MISSIONS.length; index++) {
         assert.equal(interactMission(progress,pos(m.steps[step].position),0),progress);
         progress=recordDualNode(progress,0);assert.equal(progress.step,step);assert.deepEqual(progress.dualDone,[0]);
         assert.equal(recordDualNode(progress,0),progress);progress=recordDualNode(progress,1);assert.equal(progress.step,step+1);continue;
+      }
+      if(m.steps[step].kind==='rendezvous'){
+        const p=pos(m.steps[step].position);assert.equal(interactMission(progress,p,0),progress);
+        assert.equal(advanceRendezvous(m.steps[step],null,1,[p],[{...p,hp:100}]),null);
+        assert.equal(advanceRendezvous(m.steps[step],null,8,[p],[]),0);
+        progress={...progress,step:step+1,intel:step+1===m.steps.length};continue;
       }
       if(m.steps[step].kind==='defend')assert.equal(interactMission(progress,pos(m.steps[step].position),1).step,step+1,'defense permits enemy presence');
       else assert.equal(interactMission(progress,pos(m.steps[step].position),1),progress,'nearby guard blocks equipment interaction');

@@ -19,3 +19,8 @@ test('communications bunker has reachable, separated data racks',()=>{
    for(const [dx,dz] of [[.5,0],[-.5,0],[0,.5],[0,-.5]]){const px=a+dx,pz=b+dz;if(Math.abs(px-x)<=layout.w/2+2&&Math.abs(pz-z)<=layout.d/2+2&&!blocked(px,pz,layout.walls))queue.push([px,pz]);}}
   assert.ok(reached,'each data rack is reachable through the bunker');}
 });
+test('nightfall detention yard has a clear entrance and objective position',()=>{
+ const m=MISSIONS[2],site=2,layout=installationLayout(m,site),[x,z]=m.sites[site],point=m.steps[site].position;
+ assert.equal(layout.w,18);assert.equal(layout.d,16);assert.equal(blocked(...point,campaignObstacles(m)),false);
+ for(let dz=layout.d/2+1;dz>=-2;dz-=.25)assert.equal(blocked(x,z+dz,layout.walls),false,'center entrance remains traversable');
+});

@@ -13,6 +13,7 @@ import {
   MISSIONS,
   objectiveSafe,
   completeSweep,
+  advanceRendezvous,
   dualNodes,
   availableDualNode,
   recordDualNode,
@@ -51,7 +52,7 @@ export function createCampaign({
     colliders = [],
     time = 0,
     exit = () => {},
-    beacon, surveillanceLamp=null, task=null,revive=null, dualDone=[], smokeClouds=[],network=false,networkWaiting=false,networkSynced=false,networkAction=()=>{},transitionRemaining=null,objectiveProps=[],completedEffects=new Set();
+    beacon, surveillanceLamp=null, task=null,revive=null, holdRemaining=null, dualDone=[], smokeClouds=[],network=false,networkWaiting=false,networkSynced=false,networkAction=()=>{},transitionRemaining=null,objectiveProps=[],completedEffects=new Set();
   const ray = new THREE.Raycaster(),
     panel = document.createElement("section");
   panel.id = "missionPanel";
@@ -113,7 +114,7 @@ export function createCampaign({
     for(const o of baseWorld)o.visible=false;
     failure.hidden = true;transitionRemaining=null;
     state = { index, status: "active", intel: false, step:0 };
-    time = 0;task=null;revive=null;dualDone=[];smokeClouds=[];objectiveProps=[];surveillanceLamp=null;completedEffects.clear();
+    time = 0;task=null;revive=null;holdRemaining=null;dualDone=[];smokeClouds=[];objectiveProps=[];surveillanceLamp=null;completedEffects.clear();
     group.visible = true;
     panel.hidden = false;
     const m = MISSIONS[index];
@@ -188,7 +189,7 @@ export function createCampaign({
         nodeIndicators.push(part(new THREE.BoxGeometry(.55,.25,.04),0x50efb1,dx,1.65,.4));
       }
       indicator=nodeIndicators[0];
-    }else if(step.kind==='sweep'){
+    }else if(step.kind==='sweep'||step.kind==='rendezvous'){
       const zone=part(new THREE.TorusGeometry(step.radius,.07,6,64),0xd4a65c,0,.08,0);zone.rotation.x=Math.PI/2;
       part(new THREE.BoxGeometry(1.5,.8,.55),0x526150,0,.42,0);
       indicator=part(new THREE.SphereGeometry(.1,8,6),0x50efb1,0,.91,0);
@@ -328,7 +329,7 @@ export function createCampaign({
     const step=state.step||0, current=m.steps[step];
     const effect=activeOperationEffect(state.index,step),effectLabel=q('.operation-effect');effectLabel.textContent=effect;effectLabel.hidden=!effect;
     if(surveillanceLamp){surveillanceLamp.material.color.set(step>0?0x43514a:0xff5945);surveillanceLamp.material.emissive.set(step>0?0x000000:0x8a1408);}
-    const progress=q('.task-progress');progress.hidden=!task&&!revive;progress.value=revive?Math.max(0,1-revive.remaining/4):task&&current?Math.max(0,1-task.remaining/current.duration):0;
+    const progress=q('.task-progress');progress.hidden=!task&&!revive&&holdRemaining===null;progress.value=revive?Math.max(0,1-revive.remaining/4):task&&current?Math.max(0,1-task.remaining/current.duration):holdRemaining!==null&&current?Math.max(0,1-holdRemaining/current.duration):0;
     const plan=q('.operation-plan ol');
     const planKey=`${state.index}:${step}`;
     if(plan.dataset.key!==planKey){plan.dataset.key=planKey;plan.replaceChildren(...m.steps.map((item,i)=>{const li=document.createElement('li');li.textContent=`${i<step?'✓ ':i===step?'→ ':''}${item.action}`;if(i===step)li.setAttribute('aria-current','step');return li;}));}
@@ -338,8 +339,9 @@ export function createCampaign({
     const destination=current?.kind==='dual'?dualNodes(current)[dualDone.includes(0)?1:0]:current?current.position:m.extract;
     const navigation=objectiveNavigation(player.position,destination);
     const extractionHint=network?'Both living players must gather within 4m. Clear nearby guards and press E.':'Clear nearby guards and press E.';
-    q('.objective').textContent=state.status==='failed'?'MISSION FAILED':state.status==='complete'?'OPERATION COMPLETE':current?`OBJECTIVE ${step+1}/${m.steps.length}: ${current.action} • ${navigation.distance}m ${navigation.direction} • ${current.hint} • ${current.kind==='sweep'?'Enter the marked zone; no interaction needed':'Press E at the marked equipment'} • ${left} guards alive`:`REACH EXTRACTION • ${navigation.distance}m ${navigation.direction} • ${extractionHint}`;
+    q('.objective').textContent=state.status==='failed'?'MISSION FAILED':state.status==='complete'?'OPERATION COMPLETE':current?`OBJECTIVE ${step+1}/${m.steps.length}: ${current.action} • ${navigation.distance}m ${navigation.direction} • ${current.hint} • ${['sweep','rendezvous'].includes(current.kind)?'Enter the marked zone; no interaction needed':'Press E at the marked equipment'} • ${left} guards alive`:`REACH EXTRACTION • ${navigation.distance}m ${navigation.direction} • ${extractionHint}`;
     if(current?.kind==='dual'&&state.status==='active')q('.objective').textContent+=` • DATA RACKS ${dualDone.length}/2`;
+    if(current?.kind==='rendezvous'&&state.status==='active'&&holdRemaining!==null)q('.objective').textContent=`SECURE DETENTION YARD • ${Math.ceil(holdRemaining)}s • Keep all living squad members inside and guards outside the zone.`;
     if(task && state.status==='active')q('.objective').textContent=`${current.action} • ${Math.ceil(task.remaining)}s • Stay within ${current.radius}m${current.kind==='defend'?' — KEEP FIGHTING; defend the relay':' — nearby threats interrupt'}`;
     if(revive&&state.status==='active')q('.objective').textContent=reviveMessage(revive,getPlayerId());
     q('.start').hidden=!network||state.status!=='waiting'||networkWaiting;
@@ -424,6 +426,11 @@ export function createCampaign({
     if(!state.intel&&activeStep?.kind==='sweep'){
       const next=completeSweep(state,player.position,enemies.map(e=>({x:e.model.position.x,z:e.model.position.z,hp:e.hp})));
       if(next!==state){state=next;playObjective();message('CHECKPOINT SECURED — NEXT INSTALLATION MARKED');}
+    }
+    if(!state.intel&&activeStep?.kind==='rendezvous'){
+      const guards=enemies.map(e=>({x:e.model.position.x,z:e.model.position.z,hp:e.hp}));
+      holdRemaining=advanceRendezvous(activeStep,holdRemaining,dt,[player.position],guards);
+      if(holdRemaining===0){state={...state,step:state.step+1,intel:state.step+1===MISSIONS[state.index].steps.length};holdRemaining=null;playObjective();message('DETENTION YARD SECURED — NEXT INSTALLATION MARKED');}
     }
     smokeClouds=smokeClouds.filter(c=>c.expires>Date.now());
     if(task){const m=MISSIONS[state.index],current=m.steps[state.step||0],checkStep=current.kind==='dual'?{...current,position:dualNodes(current)[task.node]}:current;
@@ -524,7 +531,7 @@ export function createCampaign({
   function interact(){
     if(network){networkAction('interact');return;}
     if(state.status!=='active'||task)return;
-    if(!state.intel&&MISSIONS[state.index].steps[state.step||0]?.kind==='sweep'){message('ENTER THE CHECKPOINT ZONE AND CLEAR NEARBY GUARDS');return;}
+    if(!state.intel&&['sweep','rendezvous'].includes(MISSIONS[state.index].steps[state.step||0]?.kind)){message('ENTER THE MARKED ZONE AND CLEAR NEARBY GUARDS');return;}
     const m=MISSIONS[state.index],point=m.steps[state.step||0]?.position||m.extract;
     const threats=enemies.filter(e=>e.hp>0&&e.model.position.distanceTo(player.position)<12).length;
     if(!state.intel&&m.steps[state.step||0]?.kind==='dual'){
@@ -546,7 +553,7 @@ export function createCampaign({
     setNetworkAction(fn){networkAction=fn;},
     sync(snapshot){
       if(!network)return;
-      const previous=state.step,previousNodes=dualDone.length;state={index:snapshot.index,status:snapshot.status,step:snapshot.step,intel:snapshot.intel};networkWaiting=snapshot.waiting;task=snapshot.task;dualDone=snapshot.dualDone||[];revive=snapshot.revive||null;transitionRemaining=snapshot.transitionRemaining??null;
+      const previous=state.step,previousNodes=dualDone.length;state={index:snapshot.index,status:snapshot.status,step:snapshot.step,intel:snapshot.intel};networkWaiting=snapshot.waiting;task=snapshot.task;holdRemaining=snapshot.holdRemaining??null;dualDone=snapshot.dualDone||[];revive=snapshot.revive||null;transitionRemaining=snapshot.transitionRemaining??null;
       for(const data of snapshot.guards){const e=enemies[data.id];if(!e)continue;e.networkMoving=Math.hypot(e.model.position.x-data.x,e.model.position.z-data.z)>.01;const killed=e.hp>0&&data.hp<=0;e.hp=data.hp;if(killed){e.deathAge=0;blood(new THREE.Vector3(data.x,1.1,data.z));}e.model.position.x=data.x;e.model.position.z=data.z;e.model.rotation.y=data.rotation;if(e.hp>0){e.model.position.y=0;e.model.rotation.x=0;}}
       if(networkSynced&&state.step>previous){
         playObjective();
