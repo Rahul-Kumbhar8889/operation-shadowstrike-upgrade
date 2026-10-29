@@ -12,6 +12,7 @@ import { createEnvironmentTextures,createTerrainTexture } from "./environmentTex
 import {
   MISSIONS,
   objectiveSafe,
+  guardSightRange,
   installationLayout,
   guardSpawn,
   campaignObstacles,
@@ -44,7 +45,7 @@ export function createCampaign({
     colliders = [],
     time = 0,
     exit = () => {},
-    beacon, task=null,revive=null, smokeClouds=[],network=false,networkWaiting=false,networkSynced=false,networkAction=()=>{},transitionRemaining=null,objectiveProps=[],completedEffects=new Set();
+    beacon, surveillanceLamp=null, task=null,revive=null, smokeClouds=[],network=false,networkWaiting=false,networkSynced=false,networkAction=()=>{},transitionRemaining=null,objectiveProps=[],completedEffects=new Set();
   const ray = new THREE.Raycaster(),
     panel = document.createElement("section");
   panel.id = "missionPanel";
@@ -106,7 +107,7 @@ export function createCampaign({
     for(const o of baseWorld)o.visible=false;
     failure.hidden = true;transitionRemaining=null;
     state = { index, status: "active", intel: false, step:0 };
-    time = 0;task=null;revive=null;smokeClouds=[];objectiveProps=[];completedEffects.clear();
+    time = 0;task=null;revive=null;smokeClouds=[];objectiveProps=[];surveillanceLamp=null;completedEffects.clear();
     group.visible = true;
     panel.hidden = false;
     const m = MISSIONS[index];
@@ -189,6 +190,11 @@ export function createCampaign({
     const ctx=labelCanvas.getContext('2d');ctx.fillStyle='#14251d';ctx.fillRect(0,0,512,64);ctx.fillStyle='#d9e5ca';ctx.font='bold 24px monospace';ctx.textAlign='center';ctx.fillText(`${i+1} / ${m.actions[i]}`,256,42);
     const texture=new THREE.CanvasTexture(labelCanvas);texture.colorSpace=THREE.SRGBColorSpace;
     const sign=mesh(new THREE.PlaneGeometry(7,.8),0xffffff,x,2.7,front+.2);sign.material.map=texture;
+    if(index===0&&i===0){
+      const mount=mesh(new THREE.BoxGeometry(.12,.12,.55),0x333d37,x+3,3.12,front+.42);
+      const camera=mesh(new THREE.BoxGeometry(.65,.3,.32),0x53605a,x+3,3.12,front+.72);camera.rotation.y=-.32;
+      surveillanceLamp=mesh(new THREE.SphereGeometry(.065,8,6),0xff5945,x+2.73,3.12,front+.9);surveillanceLamp.material.emissive.set(0x8a1408);
+    }
     mesh(new THREE.BoxGeometry(2.25,.12,.45),0x353e38,x+layout.doorOffset,3.1,front+.1);
     for(const dx of [-1.12,1.12])mesh(new THREE.BoxGeometry(.12,3.1,.45),0x414a43,x+layout.doorOffset+dx,1.55,front+.1);
     mesh(new THREE.CylinderGeometry(.27,.3,.6,10),0x7a8177,x+2,4,z);
@@ -301,6 +307,7 @@ export function createCampaign({
     q("h2").textContent = m.name;
     q(".brief").textContent = m.brief;
     const step=state.step||0, current=m.steps[step];
+    if(surveillanceLamp){surveillanceLamp.material.color.set(step>0?0x43514a:0xff5945);surveillanceLamp.material.emissive.set(step>0?0x000000:0x8a1408);}
     const progress=q('.task-progress');progress.hidden=!task&&!revive;progress.value=revive?Math.max(0,1-revive.remaining/4):task&&current?Math.max(0,1-task.remaining/current.duration):0;
     const plan=q('.operation-plan ol');
     const planKey=`${state.index}:${step}`;
@@ -403,7 +410,7 @@ export function createCampaign({
       const eye = e.model.position.clone().add(new THREE.Vector3(0, 1.7, 0)),
         target = player.position.clone().add(new THREE.Vector3(0, 1.7, 0));
       const distance = eye.distanceTo(target),
-        visible = distance < 23 && lineClear(eye, target);
+        visible = distance < guardSightRange(state.index,state.step||0) && lineClear(eye, target);
       const defense=task&&MISSIONS[state.index].steps[state.step||0]?.kind==='defend';
       const rally=defense&&e.model.position.distanceTo(player.position)<60;
       if(visible&&e.hp<=50&&!defense&&time>=(e.nextCoverAttempt||0)){e.coverTarget=findGuardCover(e.model.position,player.position,boxes);e.coverUntil=time+2.5;e.nextCoverAttempt=time+10;}

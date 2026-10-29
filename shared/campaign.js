@@ -22,7 +22,7 @@ MISSIONS.push({name:'04 / IRON HORIZON',brief:'Penetrate the airfield perimeter,
 for(const m of MISSIONS){m.steps=m.sites.map(([x,z],i)=>({position:[x,z-2],action:m.actions[i],duration:i%3===1?10:i%3===2?6:3}));m.objective=m.steps[0].position;m.action=m.actions[0];}
 // Objective mechanics are shared by solo and the authoritative co-op server.
 const operationPlans = [
- [['switch','ISOLATE CCTV','Cut the security feed before entering the freight offices.'],['recover','SEIZE DISPATCH CODES','Recover the dispatch case from the office.'],['defend','HOLD FREIGHT CHECKPOINT','Start the override, then defend the checkpoint for 25 seconds.'],['plant','RIG FUEL CONTROL','Attach a demolition charge to the fuel controller.'],['recover','RECOVER TRANSPORT MANIFEST','Collect the transport dossier.'],['defend','TRANSMIT FIELD EVIDENCE','Hold the relay area while headquarters receives the evidence.']],
+ [['switch','ISOLATE CCTV','Cut the security feed to reduce guard detection range across the compound.'],['recover','SEIZE DISPATCH CODES','Recover the dispatch case from the office.'],['defend','HOLD FREIGHT CHECKPOINT','Start the override, then defend the checkpoint for 25 seconds.'],['plant','RIG FUEL CONTROL','Attach a demolition charge to the fuel controller.'],['recover','RECOVER TRANSPORT MANIFEST','Collect the transport dossier.'],['defend','TRANSMIT FIELD EVIDENCE','Hold the relay area while headquarters receives the evidence.']],
  [['recover','ACQUIRE SECURITY KEYCARD','Take the access card from the security office.'],['switch','CUT GENERATOR POWER','Isolate the generator breaker.'],['plant','DESTROY UPLINK CONTROL','Fit a charge to the satellite control cabinet.'],['download','DOWNLOAD ENCRYPTION DATA','Remain at the server while the encrypted archive downloads.'],['switch','SHUT DOWN RADAR','Cut the radar tracking circuit.'],['defend','HOLD EMERGENCY RELAY','Protect the relay during the final transmission.']],
  [['recover','RECOVER ACCESS CODES','Collect the command access case.'],['switch','DISABLE BASE ALARM','Disconnect the alarm circuit.'],['download','COPY DETENTION RECORDS','Download the detention records at the server rack.'],['defend','SECURE HANGAR OVERRIDE','Defend the hangar controls until the route opens.'],['plant','DEMOLISH COMMAND ARCHIVE','Place a charge on the archive controller.'],['recover','RECOVER EVACUATION DOSSIER','Take the evacuation dossier before extraction.']],
  [['switch','BREACH PERIMETER CONTROL','Open the airfield security circuit.'],['plant','SABOTAGE AIRFIELD RADAR','Attach a charge to the radar controller.'],['switch','CUT RUNWAY POWER','Isolate the runway lighting breaker.'],['recover','RECOVER FLIGHT RECORDS','Take the flight recorder case.'],['plant','SABOTAGE FUEL PUMPS','Rig the fuel pump control panel.'],['download','DOWNLOAD COMMAND INTELLIGENCE','Stay at the server to copy the command archive.'],['defend','HOLD EXTRACTION CORRIDOR','Defend the corridor override until extraction is cleared.']]
@@ -37,6 +37,9 @@ export function objectiveSafe(step,position,livingGuards=0,starting=false){
  const radius=starting?2.4:step.radius;
  return Math.hypot(position.x-step.position[0],position.z-step.position[1])<=radius&&(step.kind==='defend'||livingGuards===0);
 }
+// Cutting the railway compound's CCTV gives the team a tangible stealth advantage.
+// Later missions use their existing standard detection distance.
+export function guardSightRange(missionIndex,step){return missionIndex===0&&step>0?16:23;}
 // Solid landmarks give each operation a distinct combat lane and cover layout.
 MISSIONS[0].landmarks=[-80,-59,-38].map(x=>({kind:'wagon',x,z:-125,w:17,h:3.4,d:3.8}));
 MISSIONS[1].landmarks=[{kind:'antenna',x:118,z:112,w:5,h:5,d:5}];

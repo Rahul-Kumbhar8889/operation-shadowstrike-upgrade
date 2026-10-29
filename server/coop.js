@@ -1,4 +1,4 @@
-import {installationLayout,guardSpawn,objectiveSafe,MISSIONS,campaignObstacles,blocked,CAMPAIGN_MAX_HP,GUARD_BULLET_DAMAGE} from '../shared/campaign.js';
+import {installationLayout,guardSpawn,objectiveSafe,guardSightRange,MISSIONS,campaignObstacles,blocked,CAMPAIGN_MAX_HP,GUARD_BULLET_DAMAGE} from '../shared/campaign.js';
 import {smokeBlocks,blastDamage} from '../shared/equipment.js';
 import {guardStep,findGuardCover} from '../shared/guardTactics.js';
 export function createCoop(index=0){
@@ -35,7 +35,7 @@ export function updateCoop(room,dt,now,rayBox,emit){
   else {c.task.remaining-=dt;if(c.task.remaining<=0){c.step++;c.intel=c.step===MISSIONS[c.index].steps.length;c.task=null;c.revision++;}}
  }
  for(const g of c.guards){if(g.hp<=0)continue;
-  const visible=living.map(([id,p])=>({id,p,d:Math.hypot(p.position.x-g.x,p.position.z-g.z)})).filter(t=>t.d<23&&sight(c,{x:g.x,z:g.z},t.p.position,rayBox,room.smokes)).sort((a,b)=>a.d-b.d)[0];
+  const visible=living.map(([id,p])=>({id,p,d:Math.hypot(p.position.x-g.x,p.position.z-g.z)})).filter(t=>t.d<guardSightRange(c.index,c.step)&&sight(c,{x:g.x,z:g.z},t.p.position,rayBox,room.smokes)).sort((a,b)=>a.d-b.d)[0];
   const defense=c.task&&MISSIONS[c.index].steps[c.step]?.kind==='defend';
   const rally=defense&&living.map(([,p])=>p).find(p=>Math.hypot(p.position.x-g.x,p.position.z-g.z)<60);
   const investigating=g.alertUntil>c.tick&&g.lastKnown;
