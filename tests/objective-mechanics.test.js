@@ -1,6 +1,6 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';
-import {MISSIONS,objectiveSafe,guardSightRange} from '../shared/campaign.js';
-import {createCoop,interactCoop,updateCoop} from '../server/coop.js';
+import {MISSIONS,objectiveSafe,guardSightRange,guardResponseMultiplier,activeOperationEffect} from '../shared/campaign.js';
+import {createCoop,interactCoop,updateCoop,alertCoopGuards} from '../server/coop.js';
 test('four operations contain distinct equipment mechanics with explicit task rules',()=>{
  const kinds=new Set(MISSIONS.flatMap(m=>m.steps.map(s=>s.kind)));
  assert.deepEqual([...kinds].sort(),['defend','download','plant','recover','switch']);
@@ -29,4 +29,17 @@ test('railway CCTV objective changes server guard detection without changing oth
  p.hp=1000;c.step=1;c.guards[0].x=0;c.guards[0].z=0;updateCoop(room,.01,4000,()=>Infinity,()=>{});assert.equal(p.hp,1000,'guard no longer detects player at 20m');
  p.position.z=15;updateCoop(room,.01,6000,()=>Infinity,()=>{});assert.equal(p.hp,930,'guards still detect nearby players');
  assert.equal(guardSightRange(1,1),23);assert.equal(guardSightRange(0,0),23);assert.equal(guardSightRange(0,1),16);
+});
+test('each operation gains its intended tactical effect only after its relevant objective',()=>{
+ const cases=[[0,1],[1,3],[2,2],[3,2]];
+ for(const [index,step] of cases){assert.equal(activeOperationEffect(index,step-1),'');assert.ok(activeOperationEffect(index,step));assert.equal(activeOperationEffect(index,0),'');}
+ assert.equal(guardResponseMultiplier(1,2),1);assert.equal(guardResponseMultiplier(1,3),.65);
+ assert.equal(guardResponseMultiplier(2,1),1);assert.equal(guardResponseMultiplier(2,2),.55);
+ assert.equal(guardSightRange(3,1),23);assert.equal(guardSightRange(3,2),19);
+ for(const [index,step] of [[1,3],[2,2]]){
+  const coop=createCoop(index);coop.status='active';coop.guards=[{id:0,x:35,z:0,hp:100}];const room={coop};
+  coop.step=step-1;alertCoopGuards(room,{x:0,z:0},48);assert.ok(coop.guards[0].lastKnown);
+  delete coop.guards[0].lastKnown;coop.step=step;alertCoopGuards(room,{x:0,z:0},48);assert.equal(coop.guards[0].lastKnown,undefined);
+  coop.guards[0].x=10;alertCoopGuards(room,{x:0,z:0},48);assert.ok(coop.guards[0].lastKnown,'nearby guards still respond');
+ }
 });

@@ -13,6 +13,8 @@ import {
   MISSIONS,
   objectiveSafe,
   guardSightRange,
+  guardResponseMultiplier,
+  activeOperationEffect,
   installationLayout,
   guardSpawn,
   campaignObstacles,
@@ -51,7 +53,7 @@ export function createCampaign({
   panel.id = "missionPanel";
   panel.hidden = true;
   panel.innerHTML =
-    '<small>SHADOWSTRIKE / FIELD OPERATIONS</small><h2></h2><p class="brief"></p><p class="objective"></p><progress class="task-progress" max="1" value="0" hidden aria-label="Objective action progress"></progress><details class="operation-plan"><summary>OPERATION PLAN</summary><ol></ol></details><canvas class="radar" width="280" height="150" aria-label="Tactical map: blue player, red guards, green terminal, cyan extraction"></canvas><p>E interact • V camera • Esc release cursor</p><button class="start" hidden>START CO-OP MISSION</button><button class="next" hidden>NEXT OPERATION</button><button class="retry">RESTART MISSION</button><button class="exit">RETURN TO MENU</button>';
+    '<small>SHADOWSTRIKE / FIELD OPERATIONS</small><h2></h2><p class="brief"></p><p class="objective"></p><p class="operation-effect" hidden></p><progress class="task-progress" max="1" value="0" hidden aria-label="Objective action progress"></progress><details class="operation-plan"><summary>OPERATION PLAN</summary><ol></ol></details><canvas class="radar" width="280" height="150" aria-label="Tactical map: blue player, red guards, green terminal, cyan extraction"></canvas><p>E interact • V camera • Esc release cursor</p><button class="start" hidden>START CO-OP MISSION</button><button class="next" hidden>NEXT OPERATION</button><button class="retry">RESTART MISSION</button><button class="exit">RETURN TO MENU</button>';
   document.body.append(panel);
   const failure = document.createElement("section");
   failure.id = "missionFailure";
@@ -307,6 +309,7 @@ export function createCampaign({
     q("h2").textContent = m.name;
     q(".brief").textContent = m.brief;
     const step=state.step||0, current=m.steps[step];
+    const effect=activeOperationEffect(state.index,step),effectLabel=q('.operation-effect');effectLabel.textContent=effect;effectLabel.hidden=!effect;
     if(surveillanceLamp){surveillanceLamp.material.color.set(step>0?0x43514a:0xff5945);surveillanceLamp.material.emissive.set(step>0?0x000000:0x8a1408);}
     const progress=q('.task-progress');progress.hidden=!task&&!revive;progress.value=revive?Math.max(0,1-revive.remaining/4):task&&current?Math.max(0,1-task.remaining/current.duration):0;
     const plan=q('.operation-plan ol');
@@ -526,7 +529,7 @@ export function createCampaign({
     },
     guardImpact(position){blood(new THREE.Vector3(position.x,position.y||1.1,position.z));},
     blast,
-    onShot(origin,noise){for(const e of enemies)if(e.hp>0&&e.model.position.distanceTo(origin)<noise){e.lastKnown=origin.clone();e.alertUntil=time+8;}},
+    onShot(origin,noise){const range=noise*guardResponseMultiplier(state.index,state.step||0);for(const e of enemies)if(e.hp>0&&e.model.position.distanceTo(origin)<range){e.lastKnown=origin.clone();e.alertUntil=time+8;}},
     smoke(position){smokeClouds.push({...position,expires:Date.now()+16000});},
     update,
     hit,

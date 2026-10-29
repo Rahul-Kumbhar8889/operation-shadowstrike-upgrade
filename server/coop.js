@@ -1,4 +1,4 @@
-import {installationLayout,guardSpawn,objectiveSafe,guardSightRange,MISSIONS,campaignObstacles,blocked,CAMPAIGN_MAX_HP,GUARD_BULLET_DAMAGE} from '../shared/campaign.js';
+import {installationLayout,guardSpawn,objectiveSafe,guardSightRange,guardResponseMultiplier,MISSIONS,campaignObstacles,blocked,CAMPAIGN_MAX_HP,GUARD_BULLET_DAMAGE} from '../shared/campaign.js';
 import {smokeBlocks,blastDamage} from '../shared/equipment.js';
 import {guardStep,findGuardCover} from '../shared/guardTactics.js';
 export function createCoop(index=0){
@@ -8,7 +8,7 @@ export function coopSnapshot(room){const c=room.coop;return {index:c.index,statu
 export function coopSpawn(c,slot){const [x,z]=MISSIONS[c.index].building;return {x:x+installationLayout(MISSIONS[c.index]).doorOffset+slot*2,y:0,z:z+34};}
 export function canCoopAct(room){return !room.coop || (room.coop.status==='active'&&room.players.size===2);}
 function sight(c,a,b,rayBox,smokes=[],respectSmoke=true){const dx=b.x-a.x,dy=(b.y??1.7)-(a.y??1.7),dz=b.z-a.z,d=Math.hypot(dx,dy,dz);if(!d)return true;const dir={x:dx/d,y:dy/d,z:dz/d};return (!respectSmoke||!smokeBlocks(a,b,smokes,Date.now()))&&!c.boxes.some(box=>rayBox({...a,y:a.y??1.7},dir,box)<d);}
-export function alertCoopGuards(room,position,noise){for(const g of room.coop.guards){if(g.hp>0&&Math.hypot(position.x-g.x,position.z-g.z)<noise){g.lastKnown={x:position.x,z:position.z};g.alertUntil=room.coop.tick+8;}}}
+export function alertCoopGuards(room,position,noise){const c=room.coop,range=noise*guardResponseMultiplier(c.index,c.step);for(const g of c.guards){if(g.hp>0&&Math.hypot(position.x-g.x,position.z-g.z)<range){g.lastKnown={x:position.x,z:position.z};g.alertUntil=c.tick+8;}}}
 export function hurtGuard(room,guard,damage,shooterId,emit){if(guard.hp<=0)return;guard.hp=Math.max(0,guard.hp-damage);if(!guard.hp){const p=room.players.get(shooterId);if(p)p.kills++;}emit('coop-guard-hit',{id:guard.id,hp:guard.hp,damage,shooterId,position:{x:guard.x,y:1.2,z:guard.z}});}
 export function coopBlast(room,position,shooterId,rayBox,emit){const c=room.coop;for(const g of c.guards){const damage=blastDamage(Math.hypot(position.x-g.x,position.z-g.z));if(damage&&sight(c,{...position,y:.9},{x:g.x,z:g.z,y:1},rayBox,[],false))hurtGuard(room,g,damage,shooterId,emit);}}
 export function interactCoop(room,id){
