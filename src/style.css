@@ -41,4 +41,16 @@ body:has(#roomPanel:not(.hidden)):has(#missionPanel:not([hidden])) #weaponPanel{
 .task-progress{width:100%;height:10px;accent-color:#67d8b5}.task-progress[hidden]{display:none}.operation-plan{margin:10px 0;color:#b9c9bf;font-size:12px}.operation-plan summary{cursor:pointer;letter-spacing:1px}.operation-plan ol{padding-left:20px;line-height:1.6;margin:8px 0}.operation-plan [aria-current=step]{color:#f1d88b;font-weight:bold}
 #missionPanel{max-height:calc(100dvh - 36px);overflow:auto;scrollbar-width:thin}@media(pointer:coarse){#missionPanel{max-height:calc(100dvh - 240px)}}@media(max-height:800px){body:has(#missionPanel:not([hidden])) #weaponPanel{display:none}}
 
+/* Keep the tactical view clear on smaller laptop screens. The full controls
+   remain available in the lobby field manual. */
+@media (max-width:1100px) and (pointer:fine){
+  body:has(#missionPanel:not([hidden])) #hud{padding:10px 12px;gap:5px;max-width:270px}
+  body:has(#missionPanel:not([hidden])) #hud>span:not(#stats):not(#networkStatus){display:none}
+  body:has(#missionPanel:not([hidden])) #stats{margin-top:2px;font-size:12px!important}
+  body:has(#missionPanel:not([hidden])) #scoreboard{top:145px;width:250px;max-height:150px;overflow:auto}
+  body:has(#missionPanel:not([hidden])) #missionPanel{width:min(295px,32vw);padding:12px;font-size:12px}
+  body:has(#missionPanel:not([hidden])) #missionPanel .radar{height:auto;max-height:100px;width:auto}
+  body:has(#roomPanel:not(.hidden)) #soundToggle{top:70px;left:50%}
+}
+
 .graphics-setting{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:10px 0;color:#b8ccc5;font:11px Arial;letter-spacing:1px}.graphics-setting select{flex:1;max-width:230px;padding:8px;background:#142830;color:#dceee4;border:1px solid #4b6b60;border-radius:5px}#instructions a{color:#8de3cc}
