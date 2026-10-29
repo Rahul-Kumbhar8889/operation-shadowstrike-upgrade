@@ -1,3 +1,4 @@
+import {getQuality,setQuality,applyRendererQuality} from './graphics.js';
 import {createWeaponModel} from './weaponModels.js';
 import {syncRemoteLife} from './remoteLife.js';
 import {applyDeathPose} from './deathPose.js';
@@ -78,6 +79,7 @@ app.innerHTML = `
       <p class="subtitle">CO-OP MISSIONS + 1V1 ARENA</p>
 
       <select id="missionSelect" aria-label="Select story operation"><option value="0">01 / Railway Interdiction</option><option value="1">02 / Signal Blackout</option><option value="2">03 / Nightfall Extraction</option><option value="3">04 / Iron Horizon Airfield</option></select>
+      <label class="graphics-setting">GRAPHICS <select id="graphicsQuality" aria-label="Graphics quality"><option value="low">Low — faster</option><option value="balanced">Balanced</option><option value="high">High — more detail</option></select></label>
       <button id="createCoop">CREATE CO-OP MISSION ROOM</button>
       <button id="createRoom" class="secondary">CREATE 1V1 ARENA ROOM (OPTIONAL)</button>
 
@@ -310,7 +312,8 @@ Object.assign(sun.shadow.camera, { left: -70, right: 70, top: 70, bottom: -70, n
 sun.shadow.camera.updateProjectionMatrix();
 sun.shadow.normalBias = 0.035;
 sun.shadow.bias = -0.0001;
-scene.add(sun);
+scene.add(sun);scene.add(sun.target);
+applyRendererQuality(renderer,sun);$('#graphicsQuality').value=getQuality();$('#graphicsQuality').onchange=event=>{setQuality(event.target.value);applyRendererQuality(renderer,sun);lobbyRendered=false;};
 
 const ground = new THREE.Mesh(
   new THREE.PlaneGeometry(100, 100),
@@ -468,7 +471,7 @@ function addRemotePlayer(data) {
   remote.group.visible = remote.alive;
 
   if (WEAPONS[data.weapon]) {
-    remote.weapon = data.weapon;
+    remote.weapon = data.weapon;remote.reloading=false;
     setCharacterWeapon(remote.group, data.weapon);
   }
 }
@@ -1009,7 +1012,7 @@ socket.on('game-state', (players) => {
     const remote = remotePlayers.get(player.id);
 
     if (remote) {
-      syncRemoteLife(remote,player.alive!==false);
+      syncRemoteLife(remote,player.alive!==false);remote.reloading=!!player.reloading;remote.group.userData.setReloading?.(remote.reloading,(WEAPONS[player.weapon]?.reloadMs||1500)/1000);
 
       if (WEAPONS[player.weapon]) {
         remote.weapon = player.weapon;
@@ -1036,10 +1039,11 @@ socket.on('weapon-state', (state) => {
     setCharacterWeapon(soldier, currentWeapon);
   }
 
-  reloading = !!state.reloading;
+  reloading = !!state.reloading;soldier.userData.setReloading?.(reloading,WEAPONS[currentWeapon].reloadMs/1000);
   updateHUD();
 });
 
+socket.on('reload-state',data=>{if(!multiplayerActive||data.id===socket.id)return;const remote=remotePlayers.get(data.id);if(remote){remote.reloading=data.reloading;remote.group.userData.setReloading?.(data.reloading,(data.duration||1500)/1000);}});
 socket.on('weapon-changed', (data) => {
   if (!multiplayerActive) return;
 
@@ -1056,7 +1060,7 @@ socket.on('weapon-changed', (data) => {
   const remote = remotePlayers.get(data.id);
 
   if (remote && WEAPONS[data.weapon]) {
-    remote.weapon = data.weapon;
+    remote.weapon = data.weapon;remote.reloading=false;
     setCharacterWeapon(remote.group, data.weapon);
   }
 });
@@ -1380,7 +1384,7 @@ function reload() {
 
   if (ammoByWeapon[id] >= weapon.magazine) return;
 
-  reloading = true;
+  reloading = true;soldier.userData.setReloading?.(true,weapon.reloadMs/1000);
   const token = ++reloadToken;
 
   showMessage('RELOADING...');
@@ -1442,7 +1446,7 @@ const touchControls=createTouchControls({canvas:renderer.domElement,keys,
  camera:()=>{firstPerson=!firstPerson;},menu:leaveGame,
  active:()=>gameActive()&&alive&&(!campaign.active||campaign.running||campaign.canExplore)&&!document.querySelector('#instructions')?.open});
 const instructions=document.createElement('dialog');instructions.id='instructions';
-instructions.innerHTML=`<h2>FIELD MANUAL</h2><p><strong>Multiplayer:</strong> create a room and share its six-character code. Your friend opens this same link and joins. First to five kills wins. Respawn takes three seconds; both players must agree to rematch.</p><p><strong>Co-op:</strong> select an operation and Create Co-op Mission Room. Both players join by code, then Start Mission. Guard damage and objectives are shared by the server; teammates cannot hurt each other. Both living players must reach extraction. To revive a downed teammate, approach within 3m and press E. Stay close for 4 seconds without taking damage; one injection restores your teammate to 350HP. If both die, restart together.<br><strong>Story:</strong> choose one of four solo operations. Follow the marked equipment and press E within 2.4m. Collect cases, cut switches, plant charges and download server data after clearing guards within 12m. Defense objectives keep running under enemy fire: stay within the marked 14m area for 25 seconds. Use cover and keep fighting. Both living co-op players must reach extraction; the next operation starts automatically. Open OPERATION PLAN for the full checklist.</p><p><strong>Desktop:</strong> WASD move, Shift sprint, mouse look, click fire, R reload, 1–9 weapons, G frag, B smoke, H heal, V view, M menu, Esc release mouse. Z scopes the sniper.</p><p><strong>Phone:</strong> landscape works best. Left joystick moves; drag the scene to look. Hold FIRE for automatic weapons. Buttons reload, switch guns, use equipment and interact.</p><p>Three healing injections per life: +350 story HP or +35 multiplayer HP, capped at maximum. Smoke conceals but does not stop bullets. Frag grenades hurt enemies; self damage is disabled.</p><button autofocus>CLOSE MANUAL</button>`;
+instructions.innerHTML=`<h2>FIELD MANUAL</h2><p><strong>Multiplayer:</strong> create a room and share its six-character code. Your friend opens this same link and joins. First to five kills wins. Respawn takes three seconds; both players must agree to rematch.</p><p><strong>Co-op:</strong> select an operation and Create Co-op Mission Room. Both players join by code, then Start Mission. Guard damage and objectives are shared by the server; teammates cannot hurt each other. Both living players must reach extraction. To revive a downed teammate, approach within 3m and press E. Stay close for 4 seconds without taking damage; one injection restores your teammate to 350HP. If both die, restart together.<br><strong>Story:</strong> choose one of four solo operations. Follow the marked equipment and press E within 2.4m. Collect cases, cut switches, plant charges and download server data after clearing guards within 12m. Defense objectives keep running under enemy fire: stay within the marked 14m area for 25 seconds. Use cover and keep fighting. Both living co-op players must reach extraction; the next operation starts automatically. Open OPERATION PLAN for the full checklist.</p><p><strong>Desktop:</strong> WASD move, Shift sprint, mouse look, click fire, R reload, 1–9 weapons, G frag, B smoke, H heal, V view, M menu, Esc release mouse. Z scopes the sniper.</p><p><strong>Phone:</strong> landscape works best. Left joystick moves; drag the scene to look. Hold FIRE for automatic weapons. Buttons reload, switch guns, use equipment and interact.</p><p>Three healing injections per life: +350 story HP or +35 multiplayer HP, capped at maximum. Smoke conceals but does not stop bullets. Frag grenades hurt enemies; self damage is disabled.</p><p><a href="/assets/characters/CREDITS.txt" target="_blank" rel="noopener">Character and animation credits</a></p><button autofocus>CLOSE MANUAL</button>`;
 document.body.append(instructions);instructions.querySelector('button').onclick=()=>instructions.close();$('#howToPlay').onclick=()=>instructions.showModal();
 
 function gameActive() {
@@ -1598,15 +1602,13 @@ function animate() {
   campaign.update(dt,gameActive() && alive && mouseLocked());
   const campaignDead = campaign.active && !alive;
   if (campaignDead) {
-    // Roll onto the ground and keep the body visible in the death camera.
-    soldier.rotation.order='YXZ';
-    soldier.rotation.y=yaw;
-    soldier.rotation.x=THREE.MathUtils.damp(soldier.rotation.x,-Math.PI/2,9,dt);
-    soldier.position.y=THREE.MathUtils.damp(soldier.position.y,.55,9,dt);
+    soldier.rotation.order='YXZ';soldier.rotation.y=yaw;
+    soldier.userData.deathAge=(soldier.userData.deathAge||0)+dt;applyDeathPose(soldier,soldier.userData.deathAge);
   } else {
-    soldier.rotation.y=yaw;
-    soldier.userData.updateAnimation?.(dt, moving, sprinting);
+    soldier.userData.deathAge=0;soldier.rotation.y=yaw;
+    soldier.userData.updateAnimation?.(dt, moving, sprinting,reloading);
   }
+  sun.position.set(soldier.position.x+32,48,soldier.position.z+24);sun.target.position.set(soldier.position.x,0,soldier.position.z);
   soldier.visible = campaignDead || (alive && !firstPerson);
   const cameraOffset = campaignDead ? new THREE.Vector3(1.5,2.7,3.4) : firstPerson ? new THREE.Vector3(0,1.7,0) : new THREE.Vector3(0.95, 2.75, 4.8);
 
@@ -1665,7 +1667,8 @@ function animate() {
     remote.group.userData.updateAnimation?.(
       dt,
       remoteMoving,
-      remoteSpeed > 6.5
+      remoteSpeed > 6.5,
+      !!remote.reloading
     );
   }
 

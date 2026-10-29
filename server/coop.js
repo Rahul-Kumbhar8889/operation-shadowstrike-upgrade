@@ -1,10 +1,10 @@
-import {objectiveSafe,MISSIONS,campaignObstacles,blocked,CAMPAIGN_MAX_HP,GUARD_BULLET_DAMAGE} from '../shared/campaign.js';
+import {installationLayout,guardSpawn,objectiveSafe,MISSIONS,campaignObstacles,blocked,CAMPAIGN_MAX_HP,GUARD_BULLET_DAMAGE} from '../shared/campaign.js';
 import {smokeBlocks,blastDamage} from '../shared/equipment.js';
 export function createCoop(index=0){
- const mission=MISSIONS[index];return {index,status:'waiting',step:0,intel:false,task:null,tick:0,revision:0,transitionRemaining:null,revive:null,boxes:campaignObstacles(mission),guards:mission.guards.map(([x,z],id)=>({id,x,z,homeX:x,homeZ:z,hp:100,rotation:0,lastFire:0,phase:id*2}))};
+ const mission=MISSIONS[index],boxes=campaignObstacles(mission);return {index,status:'waiting',step:0,intel:false,task:null,tick:0,revision:0,transitionRemaining:null,revive:null,boxes,guards:mission.guards.map((position,id)=>{const [x,z]=guardSpawn(position,boxes);return {id,x,z,homeX:x,homeZ:z,hp:100,rotation:0,lastFire:0,phase:id*2};})};
 }
 export function coopSnapshot(room){const c=room.coop;return {index:c.index,status:c.status,step:c.step,intel:c.intel,task:c.task?{remaining:c.task.remaining}:null,revive:c.revive?{remaining:c.revive.remaining,targetId:c.revive.targetId}:null,revision:c.revision,transitionRemaining:c.transitionRemaining,waiting:room.players.size<2,guards:c.guards.map(({id,x,z,hp,rotation})=>({id,x,z,hp,rotation}))};}
-export function coopSpawn(c,slot){const [x,z]=MISSIONS[c.index].building;return {x:x+slot*2,y:0,z:z+34};}
+export function coopSpawn(c,slot){const [x,z]=MISSIONS[c.index].building;return {x:x+installationLayout(MISSIONS[c.index]).doorOffset+slot*2,y:0,z:z+34};}
 export function canCoopAct(room){return !room.coop || (room.coop.status==='active'&&room.players.size===2);}
 function sight(c,a,b,rayBox,smokes=[],respectSmoke=true){const dx=b.x-a.x,dy=(b.y??1.7)-(a.y??1.7),dz=b.z-a.z,d=Math.hypot(dx,dy,dz);if(!d)return true;const dir={x:dx/d,y:dy/d,z:dz/d};return (!respectSmoke||!smokeBlocks(a,b,smokes,Date.now()))&&!c.boxes.some(box=>rayBox({...a,y:a.y??1.7},dir,box)<d);}
 export function alertCoopGuards(room,position,noise){for(const g of room.coop.guards){if(g.hp>0&&Math.hypot(position.x-g.x,position.z-g.z)<noise){g.lastKnown={x:position.x,z:position.z};g.alertUntil=room.coop.tick+8;}}}

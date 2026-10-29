@@ -54,6 +54,6 @@ export function createWeaponModel(id){
   if(sniper){box(.10,.08,.12,polymer,0,.06,.38);tube(.018,.13,trim,.14,.02,-.14);}
   if(id==='battle')box(.13,.29,.19,polymer,0,-.24,-.35);
  }
- for(const [material,geometries] of batches){const flat=geometries.map(g=>g.index?g.toNonIndexed():g);const geometry=mergeGeometries(flat);for(const g of new Set([...geometries,...flat]))g.dispose();const mesh=new THREE.Mesh(geometry,material);mesh.castShadow=true;root.add(mesh);}
+ for(const [material,geometries] of batches){const flat=geometries.map(g=>g.index?g.toNonIndexed():g);const geometry=mergeGeometries(flat);for(const g of new Set([...geometries,...flat]))g.dispose();geometry.userData.sharedWeapon=true;const mesh=new THREE.Mesh(geometry,material);mesh.castShadow=true;root.add(mesh);}
  root.userData.weaponId=id;templates.set(id,root);return root.clone(true);
 }

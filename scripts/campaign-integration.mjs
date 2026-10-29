@@ -10,11 +10,11 @@ try{
   const campaign=createCampaign({scene,player,obstacles,onDamage:n=>damage+=n,onReset:p=>player.position.set(p.x,0,p.z),message:()=>{},tracer:()=>{}});const panel=document.querySelectorAll('#missionPanel')[1];const ok=(v,msg)=>{if(!v)throw Error(msg);};const results=[];const audio=await import('/src/combatEffects.js');await audio.preloadCombatAudio();ok(audio.loadedAudioCount()===6,'all six recorded Ogg effects decode in the browser');
   for(let index=0;index<MISSIONS.length;index++){
    campaign.start(index);const m=MISSIONS[index];ok(!base.visible,'base scenery hidden');
-   const guards=[...new Set(campaign.aimMeshes().map(mesh=>mesh.userData.guard))];ok(guards.length===m.guards.length,'guard population');
+   const guards=[...new Set(campaign.aimMeshes().map(mesh=>mesh.userData.guard))];ok(guards.length===m.guards.length,'guard population');await Promise.all(guards.map(g=>g.model.userData.visualReady));ok(guards.every(g=>g.model.userData.modelState==='ready'),'all guards use the rigged model');
    if(index===0){const guard=guards[1];player.position.copy(guard.model.position).add(new THREE.Vector3(0,0,5));scene.updateMatrixWorld(true);campaign.update(1.5,true);ok(damage>0,'guard must fire in clear sight');const before=damage;campaign.smoke(player.position);campaign.update(2,true);ok(damage===before,'smoke must break guard sight');}
    scene.updateMatrixWorld(true);
    campaign.blast(guards[0].model.position);ok(guards[0].hp===0,'nearby grenade blast neutralizes a guard');
-   for(const guard of guards.filter(g=>g.hp>0)){const origin=guard.model.position.clone().add(new THREE.Vector3(0,1.25,1));ok(campaign.hit(origin,new THREE.Vector3(0,0,-1),200,2),'guard hit ray');}
+   for(const guard of guards.filter(g=>g.hp>0)){const origin=guard.model.position.clone().add(new THREE.Vector3(0,1.25,1));if(!campaign.hit(origin,new THREE.Vector3(0,0,-1),200,2)){const bounds=new THREE.Box3().setFromObject(guard.model);throw Error('guard hit ray '+JSON.stringify({position:guard.model.position.toArray(),bounds:[bounds.min.toArray(),bounds.max.toArray()],meshes:campaign.aimMeshes().filter(o=>o.userData.guard===guard).map(o=>({name:o.name,visible:o.visible,skin:o.isSkinnedMesh}))}));}}
    ok(campaign.aimMeshes().length===0,'all neutralized models remain prone and are no longer targetable');
    for(let step=0;step<m.steps.length;step++){
     const point=m.steps[step].position;player.position.set(point[0],0,point[1]);campaign.interact();

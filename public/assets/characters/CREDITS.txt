@@ -1,0 +1,18 @@
+OPERATION SHADOWSTRIKE — rigged operator credits
+
+Model: FREE [Military Soldier] RIGGED by BAMEN (@bamenwo05)
+https://sketchfab.com/3d-models/free-military-soldier-rigged-e9c56308a67d4a3db62e914fafa4d198
+License: Creative Commons Attribution 4.0 International
+https://creativecommons.org/licenses/by/4.0/
+
+Adapted/retargeted GLB published by cktang88/3d-fps:
+https://github.com/cktang88/3d-fps/tree/130ac2a5c856401ec36e7d35afcfefe40c5801f4
+Animation clips: Quaternius Universal Animation Library 1 and 2 (CC0).
+https://quaternius.com/packs/universalanimationlibrary.html
+https://quaternius.com/packs/universalanimationlibrary2.html
+
+Shadowstrike modifications: pruned to nine clips, removed mocap_* clips and
+unused data, made locomotion in place, changed material finish and uniform
+colors, normalized visible scale, and attached Shadowstrike's original weapons.
+No endorsement by the original authors is implied. See sources.json for hashes.
+The rigged model is a game asset, not a photorealistic scanned human.

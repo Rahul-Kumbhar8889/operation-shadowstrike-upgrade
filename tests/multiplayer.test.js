@@ -221,3 +221,12 @@ test('two clients join a real co-op operation, share start/guards and cannot dam
 });
 
 test('a waiting co-op player can explore while guards and combat stay paused',async()=>{const a=await client('websocket');try{const room=await a.timeout(2000).emitWithAck('create-coop',0);a.emit('player-move',{position:{x:room.spawn.x+.5,y:0,z:room.spawn.z},rotation:0});await new Promise(r=>setTimeout(r,30));a.emit('shoot',{direction:{x:0,y:0,z:-1}});const inventory=event(a,'weapon-state');const response=await a.timeout(2000).emitWithAck('join-room',room.code);assert.equal(response.spawn.x,room.spawn.x+.5);assert.equal(response.coop.status,'waiting');assert.deepEqual(response.coop.guards,room.coop.guards);assert.equal((await inventory).ammo.assault,30);}finally{a.disconnect();}});
+
+test('reload start and completion replicate to the other player',async()=>{
+ const a=await client('websocket'),b=await client('websocket');
+ try{const made=await a.timeout(2000).emitWithAck('create-room');assert.ok((await b.timeout(2000).emitWithAck('join-room',made.code)).ok);
+ const ammo=event(a,'ammo-update',n=>n===29);a.emit('shoot',{direction:{x:0,y:1,z:0}});await ammo;
+ const started=event(b,'reload-state',s=>s.id===a.id&&s.reloading),finished=event(b,'reload-state',s=>s.id===a.id&&!s.reloading);
+ a.emit('reload');assert.equal((await started).duration,1200);await finished;
+ }finally{a.disconnect();b.disconnect();}
+});

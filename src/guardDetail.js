@@ -1,3 +1,4 @@
+import {GRAPHICS,getQuality} from './graphics.js';
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 // Distant human silhouette: same standing scale, far fewer draw calls/triangles.
@@ -9,6 +10,6 @@ export function addGuardDetail(model){
  part(new THREE.SphereGeometry(.12,8,6),0xb99776,0,1.72,0);part(new THREE.SphereGeometry(.145,8,4,0,Math.PI*2,0,Math.PI/2),0x353f30,0,1.77,0);
  part(new THREE.BoxGeometry(.27,.34,.13),0x353f30,0,1.3,.19);part(new THREE.BoxGeometry(.1,.12,.7),0x252c24,.1,1.25,-.50);
  for(const [color,geometries] of batches){const mesh=new THREE.Mesh(mergeGeometries(geometries.map(g=>g.index?g.toNonIndexed():g)),new THREE.MeshStandardMaterial({color,roughness:1}));far.add(mesh);geometries.forEach(g=>g.dispose());}
- const near=[...model.children];model.add(far);far.visible=false;
- return distance=>{const detailed=distance<38;for(const child of near)child.visible=detailed;far.visible=!detailed;};
+ model.add(far);far.visible=false;
+ return distance=>{const detailed=distance<GRAPHICS[getQuality()].guardDetail;model.userData.detailed=detailed;for(const child of model.children)if(child!==far)child.visible=detailed&&!model.userData.hiddenParts?.has(child);far.visible=!detailed;};
 }

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   MISSIONS,
-  missionWalls,
+  installationLayout,
   blocked,
   interactMission,
 } from "../shared/campaign.js";
@@ -29,11 +29,11 @@ for (let index = 0; index < MISSIONS.length; index++) {
     assert.equal(interactMission(failed, pos(m.objective), 0), failed);
   });
   test(`${m.name}: entrance and interior route are physically traversable`, () => {
-    const walls = missionWalls(m.building),
+    const layout=installationLayout(m),walls=layout.walls,
       [x, z] = m.building;
-    assert.equal(blocked(x, z + 4, walls), false, "door is open");
-    assert.equal(blocked(x - 3, z + 4, walls), true, "wall remains solid");
-    const start = [x, z + 6],
+    assert.equal(blocked(x+layout.doorOffset, z + layout.d/2, walls), false, "door is open");
+    assert.equal(blocked(x-layout.w/2+.5, z + layout.d/2, walls), true, "wall remains solid");
+    const start = [x+layout.doorOffset, z + layout.d/2+2],
       goal = m.objective,
       queue = [start],
       seen = new Set([start.join(",")]);
@@ -53,8 +53,8 @@ for (let index = 0; index < MISSIONS.length; index++) {
         const n = [a + dx, b + dz],
           key = n.join(",");
         if (
-          Math.abs(n[0] - x) > 7 ||
-          Math.abs(n[1] - z) > 7 ||
+          Math.abs(n[0] - x) > layout.w/2+3 ||
+          Math.abs(n[1] - z) > layout.d/2+3 ||
           seen.has(key) ||
           blocked(...n, walls)
         )

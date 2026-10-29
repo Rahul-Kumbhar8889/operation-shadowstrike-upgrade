@@ -1,3 +1,4 @@
+import {getQuality} from './graphics.js';
 import * as THREE from 'three';
 // Existing self-hosted CC0 maps. Loading failure keeps the procedural fallback.
 let pending;
@@ -12,5 +13,5 @@ export function loadMissionMaterials(){
 }
 export function applyMissionMaterial(material,maps,kind){
  const textures=maps?.[kind];if(!textures)return false;
- Object.assign(material,textures);material.bumpMap=null;material.normalScale.setScalar(kind==='ground'?.35:.5);material.roughness=1;material.metalness=kind==='metal'?.65:0;material.aoMapIntensity=.55;material.color.setHex(kind==='ground'?0x9b9d83:0xffffff);material.needsUpdate=true;return true;
+ Object.assign(material,textures);if(getQuality()==='low'){material.normalMap=null;material.aoMap=null;material.metalnessMap=null;}material.bumpMap=null;material.normalScale.setScalar(kind==='ground'?.35:.5);material.roughness=1;material.metalness=kind==='metal'?.65:0;material.aoMapIntensity=.55;material.color.setHex(kind==='ground'?0x9b9d83:0xffffff);material.needsUpdate=true;return true;
 }

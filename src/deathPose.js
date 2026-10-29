@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 export function applyDeathPose(model,elapsed){
+ if(model.userData.rigged)return model.userData.rigged.death(elapsed);
  const t=THREE.MathUtils.clamp(elapsed/1.05,0,1),fall=t*t*(3-2*t);
  model.rotation.x=-Math.PI/2*fall;model.rotation.z=.12*Math.sin(Math.PI*t);model.position.y=.28*fall;
  const torso=model.getObjectByName('Torso');if(torso)torso.rotation.x=.25*Math.sin(Math.PI*t);

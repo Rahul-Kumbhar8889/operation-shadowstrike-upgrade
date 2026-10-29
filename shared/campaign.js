@@ -53,6 +53,24 @@ export function missionWalls([x, z]) {
     [x - 2, z, 5.5, 3.5, 0.25],
   ];
 }
+// These layouts define both visible walls and authoritative collision.
+export function installationLayout(m,site=0){
+ const [x,z]=m.sites[site],index=MISSIONS.indexOf(m);
+ if(index===0)return {w:10,d:8,doorOffset:0,windowXs:[-3,3],theme:'freight',walls:missionWalls([x,z])};
+ const w=index===1?12:index===2?10:14,d=index===2?12:index===1?10:8,half=w/2,depth=d/2,doorOffset=index===3?4:0;
+ const walls=[[x-half,z,.35,3.5,d],[x+half,z,.35,3.5,d],[x,z-depth,w,3.5,.35]];
+ const left=half+doorOffset-1,right=half-doorOffset-1;
+ walls.push([x-half+left/2,z+depth,left,3.5,.35],[x+half-right/2,z+depth,right,3.5,.35]);
+ if(index===1)walls.push([x-3.5,z,5,3.5,.25],[x+3.5,z,5,3.5,.25]);
+ if(index===2)walls.push([x-3,z-1,4,3.5,.25],[x-3,z+2,4,3.5,.25]);
+ if(index===3)walls.push([x-2.75,z,8.5,3.5,.25]);
+ return {w,d,doorOffset,windowXs:index===3?[-4,0]:index===1?[-4,4]:[-3,3],theme:index===1?'communications':index===2?'detention':'bunker',walls};
+}
+export function guardSpawn(position,boxes){
+ const [x,z]=position;if(!blocked(x,z,boxes))return [x,z];
+ for(let distance=1;distance<=6;distance++)for(const [dx,dz] of [[0,1],[0,-1],[1,0],[-1,0],[1,1],[-1,1],[1,-1],[-1,-1]]){const px=x+dx*distance,pz=z+dz*distance;if(!blocked(px,pz,boxes))return [px,pz];}
+ throw new Error('No clear guard spawn near installation');
+}
 export function blocked(x, z, boxes, r = 0.38) {
   return boxes.some(
     ([a, b, w, , d]) =>
@@ -70,7 +88,7 @@ export function interactMission(state, position, livingGuards) {
 
 // Shared physical layout for cooperative movement, sight and weapon validation.
 export function campaignObstacles(m){
- const boxes=m.sites.flatMap(missionWalls);
+ const boxes=m.sites.flatMap((_,i)=>installationLayout(m,i).walls);
  for(const p of m.landmarks)boxes.push([p.x,p.z,p.w,p.h,p.d]);
  for(let n=0;n<6;n++)boxes.push([-5,55-n*22,5,3,12]);
  for(let n=0;n<5;n++)boxes.push([45+n*4,-5,2.8,3.2,2.8]);

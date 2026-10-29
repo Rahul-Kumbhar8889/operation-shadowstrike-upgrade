@@ -1,0 +1,38 @@
+{
+  "model": {
+    "author": "BAMEN",
+    "title": "FREE [Military Soldier] RIGGED",
+    "source": "https://sketchfab.com/3d-models/free-military-soldier-rigged-e9c56308a67d4a3db62e914fafa4d198",
+    "license": "http://creativecommons.org/licenses/by/4.0/",
+    "licenseRequirements": "Author must be credited. Commercial use is allowed."
+  },
+  "redistributedSource": "https://github.com/cktang88/3d-fps/blob/130ac2a5c856401ec36e7d35afcfefe40c5801f4/public/assets/models/characters/soldier.glb",
+  "upstreamSha256": "6f229176b1ca49ff33605718ebfcca7fcee8f65d6d311ce3c86693df9310d2d7",
+  "outputSha256": "9766eb4134263649a8f196b8d19af86bd635f8516ee8d35935f3fbb47be339a5",
+  "outputBytes": 2173076,
+  "changes": [
+    "Pruned to nine needed animation clips; removed all mocap_* clips and their unused accessors",
+    "Removed horizontal root travel from locomotion clips",
+    "Runtime uniform recoloring, scaled to game height, weapon anchoring and animation blending"
+  ],
+  "animationSource": {
+    "author": "Quaternius",
+    "license": "CC0-1.0",
+    "urls": [
+      "https://quaternius.com/packs/universalanimationlibrary.html",
+      "https://quaternius.com/packs/universalanimationlibrary2.html"
+    ],
+    "adaptation": "Retargeted by cktang88/3d-fps"
+  },
+  "clips": [
+    "aim_idle",
+    "aim_walk",
+    "aim_run",
+    "aim_sprint",
+    "reload",
+    "shoot",
+    "death",
+    "revive_kneel",
+    "revived"
+  ]
+}

@@ -9,7 +9,9 @@ import { createEnvironmentTextures,createTerrainTexture } from "./environmentTex
 import {
   MISSIONS,
   objectiveSafe,
-  missionWalls,
+  installationLayout,
+  guardSpawn,
+  campaignObstacles,
   interactMission,
   blocked,
 } from "../shared/campaign.js";
@@ -83,7 +85,7 @@ export function createCampaign({
     const gs = new Set(),
       ms = new Set();
     group.traverse((o) => {
-      if (o.geometry) gs.add(o.geometry);
+      if (o.geometry&&!o.geometry.userData.sharedOperator&&!o.geometry.userData.sharedWeapon) gs.add(o.geometry);
       if (o.material) ms.add(o.material);
     });
     gs.forEach((g) => g.dispose());
@@ -124,10 +126,10 @@ export function createCampaign({
       const road=mesh(new THREE.PlaneGeometry(5,length),0x727366,(ax+bx)/2,.005,(az+bz)/2);road.rotation.x=-Math.PI/2;road.rotation.z=-Math.atan2(bx-ax,bz-az);road.userData.surface='asphalt';
     }
     for(let i=0;i<m.sites.length;i++){
-    const [x,z]=m.sites[i], objective=m.steps[i].position;
+    const [x,z]=m.sites[i], objective=m.steps[i].position,layout=installationLayout(m,i),front=z+layout.d/2;
     // Every installation is entered through a real doorway and interior passage.
 
-    for (const [a, b, w, h, d] of missionWalls([x,z])) {
+    for (const [a, b, w, h, d] of layout.walls) {
       const o = {
         x: a,
         z: b,
@@ -140,8 +142,8 @@ export function createCampaign({
       obstacles.push(o);
       colliders.push(o);
     }
-    mesh(new THREE.BoxGeometry(10, 0.08, 8), 0x55594f, x, 0.04, z);
-    mesh(new THREE.BoxGeometry(10.4, 0.16, 8.4), 0x343c35, x, 3.6, z);
+    mesh(new THREE.BoxGeometry(layout.w, 0.08, layout.d), 0x55594f, x, 0.04, z);
+    mesh(new THREE.BoxGeometry(layout.w+.4, 0.16, layout.d+.4), 0x343c35, x, 3.6, z);
     const step=m.steps[i],ox=objective[0],oz=objective[1],parts=[];
     const part=(geometry,color,dx,y,dz)=>{const o=mesh(geometry,color,ox+dx,y,oz+dz);parts.push(o);return o;};
     let indicator;
@@ -176,16 +178,18 @@ export function createCampaign({
     const labelCanvas=document.createElement('canvas');labelCanvas.width=512;labelCanvas.height=64;
     const ctx=labelCanvas.getContext('2d');ctx.fillStyle='#14251d';ctx.fillRect(0,0,512,64);ctx.fillStyle='#d9e5ca';ctx.font='bold 24px monospace';ctx.textAlign='center';ctx.fillText(`${i+1} / ${m.actions[i]}`,256,42);
     const texture=new THREE.CanvasTexture(labelCanvas);texture.colorSpace=THREE.SRGBColorSpace;
-    const sign=mesh(new THREE.PlaneGeometry(7,.8),0xffffff,x,2.7,z+4.2);sign.material.map=texture;
-    mesh(new THREE.BoxGeometry(2.25,.12,.45),0x353e38,x,3.1,z+4.1);
-    for(const dx of [-1.12,1.12])mesh(new THREE.BoxGeometry(.12,3.1,.45),0x414a43,x+dx,1.55,z+4.1);
+    const sign=mesh(new THREE.PlaneGeometry(7,.8),0xffffff,x,2.7,front+.2);sign.material.map=texture;
+    mesh(new THREE.BoxGeometry(2.25,.12,.45),0x353e38,x+layout.doorOffset,3.1,front+.1);
+    for(const dx of [-1.12,1.12])mesh(new THREE.BoxGeometry(.12,3.1,.45),0x414a43,x+layout.doorOffset+dx,1.55,front+.1);
     mesh(new THREE.CylinderGeometry(.27,.3,.6,10),0x7a8177,x+2,4,z);
-    for(const dx of [-3,3]){
-      mesh(new THREE.BoxGeometry(1.45,.85,.07),0x263e42,x+dx,1.7,z+4.19);
-      for(const offset of [-.72,.72])mesh(new THREE.BoxGeometry(.06,.95,.1),0x525e55,x+dx+offset,1.7,z+4.24);
-      mesh(new THREE.BoxGeometry(1.5,.06,.1),0x525e55,x+dx,2.15,z+4.24);
-      mesh(new THREE.BoxGeometry(1.5,.06,.1),0x525e55,x+dx,1.25,z+4.24);
+    for(const dx of layout.windowXs){
+      mesh(new THREE.BoxGeometry(1.45,.85,.07),0x263e42,x+dx,1.7,front+.19);
+      for(const offset of [-.72,.72])mesh(new THREE.BoxGeometry(.06,.95,.1),0x525e55,x+dx+offset,1.7,front+.24);
+      mesh(new THREE.BoxGeometry(1.5,.06,.1),0x525e55,x+dx,2.15,front+.24);
+      mesh(new THREE.BoxGeometry(1.5,.06,.1),0x525e55,x+dx,1.25,front+.24);
     }
+    if(layout.theme==='detention')for(const dx of layout.windowXs)for(const offset of [-.45,0,.45])mesh(new THREE.CylinderGeometry(.025,.025,.9,6),0x46514a,x+dx+offset,1.7,front+.3);
+    if(layout.theme==='communications')for(const dx of [-2,2]){const panel=mesh(new THREE.BoxGeometry(2,.08,2),0x263b4e,x+dx,3.85,z);panel.rotation.x=.15;}
     const fixture=mesh(new THREE.BoxGeometry(1.5,.07,.22),0xceddcc,x,3.45,z);fixture.material.emissive.set(0x63745c);
     // Interior desks and equipment establish scale without closing the passage.
     mesh(new THREE.BoxGeometry(1.8,.75,.7),0x485348,x-2,.4,z-2.6);
@@ -244,13 +248,14 @@ export function createCampaign({
       m.extract[1],
     );
     beacon.rotation.x = Math.PI / 2;
+    const hitGeometry=new THREE.CapsuleGeometry(.38,1.04,4,8),hitMaterial=new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false,colorWrite:false});
     enemies = m.guards.map(([a, b], i) => {
       const model = createSoldier(0x75664a);
-      model.position.set(a, 0, b);
-      if (blocked(a, b, obstacles.map(o=>[o.x,o.z,o.w,o.h,o.d]))) model.position.z += 1;
+      const spawn=guardSpawn([a,b],campaignObstacles(m));model.position.set(spawn[0],0,spawn[1]);
       group.add(model);
+      const hitbox=new THREE.Mesh(hitGeometry,hitMaterial);hitbox.position.set(model.position.x,.9,model.position.z);group.add(hitbox);
       return {
-        model,
+        model,hitbox,
         detail:addGuardDetail(model),
         hp: 100,
         home: model.position.clone(),
@@ -258,7 +263,7 @@ export function createCampaign({
         lastFire: 0,
       };
     });
-    onReset({ x:m.building[0], z:m.building[1]+15 });
+    onReset({ x:m.building[0]+installationLayout(m).doorOffset, z:m.building[1]+installationLayout(m).d/2+11 });
     const generation=materialGeneration;
     loadMissionMaterials().then(maps=>{if(generation!==materialGeneration)return;group.traverse(o=>{if(o.isMesh&&o.userData.surface)applyMissionMaterial(o.material,maps,o.userData.surface);});});
     paint();
@@ -411,16 +416,11 @@ export function createCampaign({
     paint();
   }
   function aimMeshes() {
-    const list = [];
-    for (const e of enemies)
-      if (e.hp > 0)
-        e.model.traverse((o) => {
-          if (o.isMesh) {
-            o.userData.guard = e;
-            list.push(o);
-          }
-        });
-    return list;
+    return enemies.filter(e=>e.hp>0).map(e=>{
+      e.hitbox.position.set(e.model.position.x,.9,e.model.position.z);
+      e.hitbox.updateWorldMatrix(true,false);e.hitbox.userData.guard=e;
+      return e.hitbox;
+    });
   }
   function hit(origin, direction, damage, wallDistance) {
     if (state.status !== "active") return false;

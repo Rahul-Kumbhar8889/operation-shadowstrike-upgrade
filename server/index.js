@@ -125,6 +125,7 @@ function publicPlayer(id, player) {
     kills: player.kills,
     deaths: player.deaths,
     alive: player.alive,
+    reloading:player.reloading,
     weapon: player.weapon,
   };
 }
@@ -882,6 +883,7 @@ io.on('connection', (socket) => {
     }
 
     player.reloading = true;
+    io.to(code).emit('reload-state',{id:socket.id,reloading:true,duration:weapon.reloadMs});
 
     sendWeaponState(socket, player);
 
@@ -898,6 +900,7 @@ io.on('connection', (socket) => {
 
       player.reloading = false;
       player.reloadTimer = null;
+      io.to(code).emit('reload-state',{id:socket.id,reloading:false});
 
       sendAmmo(socket, player);
     }, weapon.reloadMs);
