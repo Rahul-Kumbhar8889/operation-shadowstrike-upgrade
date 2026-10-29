@@ -383,7 +383,7 @@ export function createCampaign({
     ).length;
   }
   function update(dt, running) {
-    for(const e of enemies){e.detail(e.model.position.distanceTo(player.position));if(e.hp<=0){e.deathAge=(e.deathAge||0)+dt;applyDeathPose(e.model,e.deathAge);}}
+    for(const e of enemies){if(e.hp<=0){e.deathAge=(e.deathAge||0)+dt;applyDeathPose(e.model,e.deathAge);}e.detail(e.model.position.distanceTo(player.position),e.hp<=0,e.deathAge||0);}
     if(!network&&state.status==='complete'&&transitionRemaining!==null){transitionRemaining-=dt;if(transitionRemaining<=0){start(state.index+1);return;}paint();}
     if(network){for(const e of enemies)if(e.hp>0)e.model.userData.updateAnimation?.(dt,!!e.networkMoving,false);return;}
     if (state.status !== "active" || !running) return;

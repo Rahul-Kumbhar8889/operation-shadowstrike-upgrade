@@ -11,5 +11,14 @@ export function addGuardDetail(model){
  part(new THREE.BoxGeometry(.27,.34,.13),0x353f30,0,1.3,.19);part(new THREE.BoxGeometry(.1,.12,.7),0x252c24,.1,1.25,-.50);
  for(const [color,geometries] of batches){const mesh=new THREE.Mesh(mergeGeometries(geometries.map(g=>g.index?g.toNonIndexed():g)),new THREE.MeshStandardMaterial({color,roughness:1}));far.add(mesh);geometries.forEach(g=>g.dispose());}
  model.add(far);far.visible=false;
- return distance=>{const detailed=distance<GRAPHICS[getQuality()].guardDetail;model.userData.detailed=detailed;for(const child of model.children)if(child!==far)child.visible=detailed&&!model.userData.hiddenParts?.has(child);far.visible=!detailed;};
+ return (distance,dead=false,deathAge=0)=>{
+  const detailed=distance<GRAPHICS[getQuality()].guardDetail;model.userData.detailed=detailed;
+  for(const child of model.children)if(child!==far)child.visible=detailed&&!model.userData.hiddenParts?.has(child);
+  far.visible=!detailed;
+  // Rigged death animates bones, not the root, so its distant replacement needs
+  // a separate fall pose. The procedural fallback already rotates its root.
+  const t=dead&&model.userData.rigged?THREE.MathUtils.clamp(deathAge/1.05,0,1):0;
+  const fall=t*t*(3-2*t);
+  far.rotation.x=fall?-Math.PI/2*fall:0;far.position.y=.28*fall;
+ };
 }
