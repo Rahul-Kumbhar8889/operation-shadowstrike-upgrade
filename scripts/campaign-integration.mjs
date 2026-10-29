@@ -5,7 +5,7 @@ try{
  browser=await chromium.launch({headless:true,executablePath:process.env.BROWSER_EXECUTABLE,args:['--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
  const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('http://127.0.0.1:5189');await page.click('.eyebrow');
  const results=await page.evaluate(async()=>{
-  const THREE=await import('/node_modules/three/build/three.module.js'),{createCampaign}=await import('/src/campaign.js'),{MISSIONS}=await import('/shared/campaign.js');
+  const THREE=await import('/node_modules/three/build/three.module.js'),{createCampaign}=await import('/src/campaign.js'),{MISSIONS,dualNodes}=await import('/shared/campaign.js');
   const scene=new THREE.Scene(),player=new THREE.Group(),base=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshBasicMaterial());scene.add(player,base);const original={x:0,z:0,w:1,h:1,d:1,mesh:base},obstacles=[original];let damage=0;
   const campaign=createCampaign({scene,player,obstacles,onDamage:n=>damage+=n,onReset:p=>player.position.set(p.x,0,p.z),message:()=>{},tracer:()=>{}});const panel=document.querySelectorAll('#missionPanel')[1];const ok=(v,msg)=>{if(!v)throw Error(msg);};const results=[];const audio=await import('/src/combatEffects.js');await audio.preloadCombatAudio();ok(audio.loadedAudioCount()===6,'all six recorded Ogg effects decode in the browser');
   for(let index=0;index<MISSIONS.length;index++){
@@ -19,6 +19,7 @@ try{
    for(let step=0;step<m.steps.length;step++){
     const point=m.steps[step].position;player.position.set(point[0],0,point[1]);
     if(m.steps[step].kind==='sweep'){campaign.update(.1,true);ok(panel.querySelector('.objective').textContent.includes(`OBJECTIVE ${step+2}/`),'entering cleared checkpoint advances the mission');continue;}
+    if(m.steps[step].kind==='dual'){for(const [x,z] of dualNodes(m.steps[step])){player.position.set(x,0,z);campaign.interact();campaign.update(m.steps[step].duration+.1,true);}ok(panel.querySelector('.objective').textContent.includes(`OBJECTIVE ${step+2}/`),'both racks advance the mission');continue;}
     campaign.interact();
     if(step===0){player.position.x+=4;campaign.update(.1,true);ok(panel.querySelector('.objective').textContent.includes(`OBJECTIVE 1/`),'leaving terminal interrupts action');player.position.x-=4;campaign.interact();}
     campaign.update(m.steps[step].duration-.1,true);ok(panel.querySelector('.objective').textContent.includes('Stay within'),'action cannot finish early');campaign.update(.11,true);

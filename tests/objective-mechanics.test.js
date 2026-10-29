@@ -3,7 +3,7 @@ import {MISSIONS,objectiveSafe,guardSightRange,guardResponseMultiplier,activeOpe
 import {createCoop,interactCoop,updateCoop,alertCoopGuards} from '../server/coop.js';
 test('four operations contain distinct equipment mechanics with explicit task rules',()=>{
  const kinds=new Set(MISSIONS.flatMap(m=>m.steps.map(s=>s.kind)));
- assert.deepEqual([...kinds].sort(),['defend','download','plant','recover','sweep','switch']);
+ assert.deepEqual([...kinds].sort(),['defend','download','dual','plant','recover','sweep','switch']);
  for(const m of MISSIONS){assert.ok(m.steps.some(s=>s.kind==='defend'));for(const s of m.steps){assert.ok(s.hint.length>20);assert.ok(s.kind==='sweep'?s.duration===0:s.duration>0);}}
 });
 test('defense starts at equipment but permits fighting and moving inside the hold area',()=>{
@@ -14,7 +14,7 @@ test('defense starts at equipment but permits fighting and moving inside the hol
  assert.equal(objectiveSafe(s,{x:x+10,z},0,true),false,'cannot remotely begin hold');
 });
 test('downloads and collection remain interruptible and require close equipment access',()=>{
- for(const s of MISSIONS.flatMap(m=>m.steps).filter(s=>!['defend','sweep'].includes(s.kind))){const [x,z]=s.position;assert.ok(objectiveSafe(s,{x,z},0));assert.equal(objectiveSafe(s,{x,z},1),false);assert.equal(objectiveSafe(s,{x:x+3,z},0),false);}
+ for(const s of MISSIONS.flatMap(m=>m.steps).filter(s=>!['defend','sweep','dual'].includes(s.kind))){const [x,z]=s.position;assert.ok(objectiveSafe(s,{x,z},0));assert.equal(objectiveSafe(s,{x,z},1),false);assert.equal(objectiveSafe(s,{x:x+3,z},0),false);}
 });
 test('co-op guards investigate loud weapons while suppressed fire preserves distance stealth',async()=>{
  const {alertCoopGuards}=await import('../server/coop.js');const c=createCoop(0);c.status='active';c.guards=[{id:0,x:30,z:0,homeX:30,homeZ:0,hp:100,phase:0,lastFire:0}];const room={coop:c,players:new Map([['a',{position:{x:0,z:0},hp:1000,alive:true}],['b',{position:{x:0,z:0},hp:1000,alive:true}]]),smokes:[]};

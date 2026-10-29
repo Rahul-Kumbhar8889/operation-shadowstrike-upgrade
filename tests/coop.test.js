@@ -1,6 +1,6 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';
 import {createCoop,coopSnapshot,coopSpawn,interactCoop,updateCoop,hurtGuard,coopBlast} from '../server/coop.js';
-import {MISSIONS,blocked} from '../shared/campaign.js';
+import {MISSIONS,blocked,dualNodes} from '../shared/campaign.js';
 const noWall=()=>Infinity;
 function room(index){const coop=createCoop(index);return {coop,players:new Map([['a',{position:coopSpawn(coop,0),alive:true,hp:1000,kills:0,deaths:0}],['b',{position:coopSpawn(coop,1),alive:true,hp:1000,kills:0,deaths:0}]]),smokes:[]};}
 for(let index=0;index<MISSIONS.length;index++)test(`co-op ${index+1}: ordered shared actions, interruption, extraction, restart snapshot`,()=>{
@@ -10,6 +10,7 @@ for(let index=0;index<MISSIONS.length;index++)test(`co-op ${index+1}: ordered sh
  for(let step=0;step<m.steps.length;step++){
   const [x,z]=m.steps[step].position;a.position={x,z};
   if(m.steps[step].kind==='sweep'){assert.equal(interactCoop(r,'a'),false);updateCoop(r,.1,Date.now(),noWall,()=>{});assert.equal(c.step,step+1);continue;}
+  if(m.steps[step].kind==='dual'){for(const [node,[nx,nz]] of dualNodes(m.steps[step]).entries()){a.position={x:nx,z:nz};assert.ok(interactCoop(r,'a'));updateCoop(r,m.steps[step].duration+.1,Date.now(),noWall,()=>{});assert.equal(c.step,step+(node===1?1:0));}continue;}
   assert.ok(interactCoop(r,'a'));
   if(step===0){a.position.x+=4;updateCoop(r,.1,Date.now(),noWall,()=>{});assert.equal(c.task,null);a.position.x-=4;assert.ok(interactCoop(r,'a'));}
   updateCoop(r,m.steps[step].duration-.1,Date.now(),noWall,()=>{});assert.equal(c.step,step);updateCoop(r,.11,Date.now(),noWall,()=>{});assert.equal(c.step,step+1);
@@ -29,6 +30,13 @@ test('checkpoint sweep advances for both clients only when a player enters and n
  updateCoop(r,.01,0,noWall,()=>{});assert.equal(c.step,2);
  a.position={x,z};updateCoop(r,.01,0,noWall,()=>{});assert.equal(c.step,2,'living guard blocks progress');
  c.guards[0].hp=0;updateCoop(r,.01,0,noWall,()=>{});assert.equal(c.step,3);assert.equal(coopSnapshot(r).step,3);assert.equal(c.task,null);
+});
+test('data racks require two distinct actions, preserve progress, and share it with both players',()=>{
+ const r=room(1),c=r.coop;c.status='active';c.step=3;c.guards=[];const step=MISSIONS[1].steps[3],nodes=dualNodes(step),a=r.players.get('a'),b=r.players.get('b');
+ a.position={x:nodes[0][0],z:nodes[0][1]};assert.ok(interactCoop(r,'a'));updateCoop(r,step.duration+.1,0,noWall,()=>{});
+ assert.deepEqual(coopSnapshot(r).dualDone,[0]);assert.equal(c.step,3);assert.equal(interactCoop(r,'a'),false,'completed rack cannot be used twice');
+ b.position={x:nodes[1][0],z:nodes[1][1]};assert.ok(interactCoop(r,'b'));b.position.x+=4;updateCoop(r,.1,0,noWall,()=>{});assert.equal(c.task,null);assert.deepEqual(c.dualDone,[0]);
+ b.position={x:nodes[1][0],z:nodes[1][1]};assert.ok(interactCoop(r,'b'));updateCoop(r,step.duration+.1,0,noWall,()=>{});assert.equal(c.step,4);assert.deepEqual(coopSnapshot(r).dualDone,[]);
 });
 test('all co-op spawns and terminals have valid shared collision; blast hits guards, not teammates',()=>{
  for(let i=0;i<MISSIONS.length;i++){const r=room(i),c=r.coop;for(const p of r.players.values())assert.equal(blocked(p.position.x,p.position.z,c.boxes),false);for(const step of MISSIONS[i].steps)assert.equal(blocked(...step.position,c.boxes),false);c.status='active';const g=c.guards[0];coopBlast(r,{x:g.x,z:g.z},'a',noWall,()=>{});assert.equal(g.hp,0);assert.equal(r.players.get('a').hp,1000);assert.equal(r.players.get('b').hp,1000);}

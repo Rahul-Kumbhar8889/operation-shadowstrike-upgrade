@@ -1,10 +1,10 @@
-import {installationLayout,guardSpawn,objectiveSafe,sweepReady,guardSightRange,guardResponseMultiplier,MISSIONS,campaignObstacles,blocked,CAMPAIGN_MAX_HP,GUARD_BULLET_DAMAGE} from '../shared/campaign.js';
+import {installationLayout,guardSpawn,objectiveSafe,sweepReady,dualNodes,availableDualNode,recordDualNode,guardSightRange,guardResponseMultiplier,MISSIONS,campaignObstacles,blocked,CAMPAIGN_MAX_HP,GUARD_BULLET_DAMAGE} from '../shared/campaign.js';
 import {smokeBlocks,blastDamage} from '../shared/equipment.js';
 import {guardStep,findGuardCover} from '../shared/guardTactics.js';
 export function createCoop(index=0){
  const mission=MISSIONS[index],boxes=campaignObstacles(mission);return {index,status:'waiting',step:0,intel:false,task:null,tick:0,revision:0,transitionRemaining:null,revive:null,boxes,guards:mission.guards.map((position,id)=>{const [x,z]=guardSpawn(position,boxes);return {id,x,z,homeX:x,homeZ:z,hp:100,rotation:0,lastFire:0,phase:id*2};})};
 }
-export function coopSnapshot(room){const c=room.coop;return {index:c.index,status:c.status,step:c.step,intel:c.intel,task:c.task?{remaining:c.task.remaining}:null,revive:c.revive?{remaining:c.revive.remaining,targetId:c.revive.targetId}:null,revision:c.revision,transitionRemaining:c.transitionRemaining,waiting:room.players.size<2,guards:c.guards.map(({id,x,z,hp,rotation})=>({id,x,z,hp,rotation}))};}
+export function coopSnapshot(room){const c=room.coop;return {index:c.index,status:c.status,step:c.step,intel:c.intel,dualDone:c.dualDone||[],task:c.task?{remaining:c.task.remaining,node:c.task.node}:null,revive:c.revive?{remaining:c.revive.remaining,targetId:c.revive.targetId}:null,revision:c.revision,transitionRemaining:c.transitionRemaining,waiting:room.players.size<2,guards:c.guards.map(({id,x,z,hp,rotation})=>({id,x,z,hp,rotation}))};}
 export function coopSpawn(c,slot){const [x,z]=MISSIONS[c.index].building;return {x:x+installationLayout(MISSIONS[c.index]).doorOffset+slot*2,y:0,z:z+34};}
 export function canCoopAct(room){return !room.coop || (room.coop.status==='active'&&room.players.size===2);}
 function sight(c,a,b,rayBox,smokes=[],respectSmoke=true){const dx=b.x-a.x,dy=(b.y??1.7)-(a.y??1.7),dz=b.z-a.z,d=Math.hypot(dx,dy,dz);if(!d)return true;const dir={x:dx/d,y:dy/d,z:dz/d};return (!respectSmoke||!smokeBlocks(a,b,smokes,Date.now()))&&!c.boxes.some(box=>rayBox({...a,y:a.y??1.7},dir,box)<d);}
@@ -17,6 +17,11 @@ export function interactCoop(room,id){
  if(downed){if(!(p.equipment?.injection>0))return false;c.revive={id,targetId:downed[0],remaining:4,hp:p.hp};return true;}
  if(c.task)return false;
  if(!c.intel&&m.steps[c.step]?.kind==='sweep')return false;
+ if(!c.intel&&m.steps[c.step]?.kind==='dual'){
+  const step=m.steps[c.step],node=availableDualNode(step,p.position,c.dualDone||[]);
+  const threats=c.guards.filter(g=>g.hp>0&&Math.hypot(g.x-p.position.x,g.z-p.position.z)<12).length;
+  if(node<0||threats)return false;c.task={id,node,remaining:step.duration};return true;
+ }
  const point=c.intel?m.extract:m.steps[c.step].position;
  const threats=c.guards.filter(g=>g.hp>0&&Math.hypot(g.x-p.position.x,g.z-p.position.z)<12).length;
  if(c.intel ? Math.hypot(p.position.x-point[0],p.position.z-point[1])>2.4||threats>0 : !objectiveSafe(m.steps[c.step],p.position,threats,true))return false;
@@ -33,9 +38,9 @@ export function updateCoop(room,dt,now,rayBox,emit){
  if(!living.length){c.status='failed';c.task=null;c.revive=null;c.revision++;return;}
  const current=MISSIONS[c.index].steps[c.step];
  if(!c.intel&&current?.kind==='sweep'&&living.some(([,p])=>sweepReady(current,p.position,c.guards))){c.step++;c.intel=c.step===MISSIONS[c.index].steps.length;c.revision++;}
- if(c.task){const p=room.players.get(c.task.id),point=MISSIONS[c.index].steps[c.step].position;
-  if(!p?.alive||!objectiveSafe(MISSIONS[c.index].steps[c.step],p.position,c.guards.filter(g=>g.hp>0&&Math.hypot(g.x-p.position.x,g.z-p.position.z)<12).length))c.task=null;
-  else {c.task.remaining-=dt;if(c.task.remaining<=0){c.step++;c.intel=c.step===MISSIONS[c.index].steps.length;c.task=null;c.revision++;}}
+ if(c.task){const p=room.players.get(c.task.id),step=MISSIONS[c.index].steps[c.step],node=c.task.node,checkStep=step.kind==='dual'?{...step,position:dualNodes(step)[node]}:step;
+  if(!p?.alive||!objectiveSafe(checkStep,p.position,c.guards.filter(g=>g.hp>0&&Math.hypot(g.x-p.position.x,g.z-p.position.z)<12).length))c.task=null;
+  else {c.task.remaining-=dt;if(c.task.remaining<=0){if(step.kind==='dual'){const next=recordDualNode(c,node);c.dualDone=next.dualDone;c.step=next.step;}else c.step++;c.intel=c.step===MISSIONS[c.index].steps.length;c.task=null;c.revision++;}}
  }
  for(const g of c.guards){if(g.hp<=0)continue;
   const visible=living.map(([id,p])=>({id,p,d:Math.hypot(p.position.x-g.x,p.position.z-g.z)})).filter(t=>t.d<guardSightRange(c.index,c.step)&&sight(c,{x:g.x,z:g.z},t.p.position,rayBox,room.smokes)).sort((a,b)=>a.d-b.d)[0];

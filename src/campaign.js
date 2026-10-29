@@ -13,6 +13,9 @@ import {
   MISSIONS,
   objectiveSafe,
   completeSweep,
+  dualNodes,
+  availableDualNode,
+  recordDualNode,
   guardSightRange,
   guardResponseMultiplier,
   activeOperationEffect,
@@ -48,7 +51,7 @@ export function createCampaign({
     colliders = [],
     time = 0,
     exit = () => {},
-    beacon, surveillanceLamp=null, task=null,revive=null, smokeClouds=[],network=false,networkWaiting=false,networkSynced=false,networkAction=()=>{},transitionRemaining=null,objectiveProps=[],completedEffects=new Set();
+    beacon, surveillanceLamp=null, task=null,revive=null, dualDone=[], smokeClouds=[],network=false,networkWaiting=false,networkSynced=false,networkAction=()=>{},transitionRemaining=null,objectiveProps=[],completedEffects=new Set();
   const ray = new THREE.Raycaster(),
     panel = document.createElement("section");
   panel.id = "missionPanel";
@@ -110,7 +113,7 @@ export function createCampaign({
     for(const o of baseWorld)o.visible=false;
     failure.hidden = true;transitionRemaining=null;
     state = { index, status: "active", intel: false, step:0 };
-    time = 0;task=null;revive=null;smokeClouds=[];objectiveProps=[];surveillanceLamp=null;completedEffects.clear();
+    time = 0;task=null;revive=null;dualDone=[];smokeClouds=[];objectiveProps=[];surveillanceLamp=null;completedEffects.clear();
     group.visible = true;
     panel.hidden = false;
     const m = MISSIONS[index];
@@ -160,7 +163,7 @@ export function createCampaign({
     mesh(new THREE.BoxGeometry(layout.w+.4, 0.16, layout.d+.4), 0x343c35, x, 3.6, z);
     const step=m.steps[i],ox=objective[0],oz=objective[1],parts=[];
     const part=(geometry,color,dx,y,dz)=>{const o=mesh(geometry,color,ox+dx,y,oz+dz);parts.push(o);return o;};
-    let indicator;
+    let indicator,nodeIndicators=[];
     if(step.kind==='recover'){
       part(new THREE.BoxGeometry(1.25,.7,.7),0x465547,0,.4,0);
       part(new THREE.TorusGeometry(.19,.035,6,12,Math.PI),0xb5baa5,0,.85,0);
@@ -178,6 +181,13 @@ export function createCampaign({
       part(new THREE.CylinderGeometry(.5,.5,1.35,14),0x647267,0,.72,0);
       for(const dx of [-.14,0,.14])part(new THREE.CylinderGeometry(.07,.07,.38,8),0x794334,dx,1,.52);
       indicator=part(new THREE.BoxGeometry(.25,.14,.06),0x50efb1,0,1.05,.62);
+    }else if(step.kind==='dual'){
+      for(const dx of [-2.5,2.5]){
+        part(new THREE.BoxGeometry(1.2,1.9,.7),0x263a40,dx,.98,0);
+        for(let n=0;n<5;n++)part(new THREE.BoxGeometry(1.05,.18,.08),0x53696c,dx,.35+n*.28,.39);
+        nodeIndicators.push(part(new THREE.BoxGeometry(.55,.25,.04),0x50efb1,dx,1.65,.4));
+      }
+      indicator=nodeIndicators[0];
     }else if(step.kind==='sweep'){
       const zone=part(new THREE.TorusGeometry(step.radius,.07,6,64),0xd4a65c,0,.08,0);zone.rotation.x=Math.PI/2;
       part(new THREE.BoxGeometry(1.5,.8,.55),0x526150,0,.42,0);
@@ -189,7 +199,7 @@ export function createCampaign({
       const zone=part(new THREE.TorusGeometry(step.radius,.055,6,64),0x4e9eae,0,.08,0);zone.rotation.x=Math.PI/2;
     }
     indicator.material.emissive.set(0x1f926a);
-    objectiveProps.push({parts,indicator,kind:step.kind});
+    objectiveProps.push({parts,indicator,nodeIndicators,kind:step.kind});
     const light = new THREE.PointLight(0xc6dec9, 18, 11);
     light.position.set(x, 2.8, z);
     group.add(light);
@@ -215,8 +225,10 @@ export function createCampaign({
     if(layout.theme==='communications')for(const dx of [-2,2]){const panel=mesh(new THREE.BoxGeometry(2,.08,2),0x263b4e,x+dx,3.85,z);panel.rotation.x=.15;}
     const fixture=mesh(new THREE.BoxGeometry(1.5,.07,.22),0xceddcc,x,3.45,z);fixture.material.emissive.set(0x63745c);
     // Interior desks and equipment establish scale without closing the passage.
-    mesh(new THREE.BoxGeometry(1.8,.75,.7),0x485348,x-2,.4,z-2.6);
-    mesh(new THREE.BoxGeometry(.7,1.8,.5),0x303c35,x+3,1,z-2.8);
+    if(step.kind!=='dual'){
+      mesh(new THREE.BoxGeometry(1.8,.75,.7),0x485348,x-2,.4,z-2.6);
+      mesh(new THREE.BoxGeometry(.7,1.8,.5),0x303c35,x+3,1,z-2.8);
+    }
     // Wall-mounted detail gives each installation a purpose without adding invisible cover.
     const back=z-layout.d/2+.22;
     const display=mesh(new THREE.BoxGeometry(1.45,.85,.12),0x182c2b,x-2,2.1,back);
@@ -322,10 +334,12 @@ export function createCampaign({
     if(plan.dataset.key!==planKey){plan.dataset.key=planKey;plan.replaceChildren(...m.steps.map((item,i)=>{const li=document.createElement('li');li.textContent=`${i<step?'✓ ':i===step?'→ ':''}${item.action}`;if(i===step)li.setAttribute('aria-current','step');return li;}));}
 
     for(let i=0;i<objectiveProps.length;i++){const prop=objectiveProps[i],done=i<step;if(done&&!completedEffects.has(i)){completedEffects.add(i);if(prop.kind==='plant'){const [x,z]=m.steps[i].position;if(!network||networkSynced)demolition(new THREE.Vector3(x,1,z));for(const o of prop.parts)o.material.color.multiplyScalar(.25);}}for(const o of prop.parts)o.visible=!(done&&(prop.kind==='recover'||prop.kind==='plant'&&o===prop.indicator));prop.indicator.material.color.set(done?0x66716c:i===step?0x50efb1:0xcb984c);prop.indicator.material.emissive.set(done?0x000000:i===step?0x1f926a:0x392400);}
-    const destination=current?current.position:m.extract;
+    for(let i=0;i<objectiveProps.length;i++)if(objectiveProps[i].kind==='dual')objectiveProps[i].nodeIndicators.forEach((light,n)=>{const done=i<step||i===step&&dualDone.includes(n);light.material.color.set(done?0x66716c:i===step?0x50efb1:0xcb984c);light.material.emissive.set(done?0x000000:i===step?0x1f926a:0x392400);});
+    const destination=current?.kind==='dual'?dualNodes(current)[dualDone.includes(0)?1:0]:current?current.position:m.extract;
     const navigation=objectiveNavigation(player.position,destination);
     const extractionHint=network?'Both living players must gather within 4m. Clear nearby guards and press E.':'Clear nearby guards and press E.';
     q('.objective').textContent=state.status==='failed'?'MISSION FAILED':state.status==='complete'?'OPERATION COMPLETE':current?`OBJECTIVE ${step+1}/${m.steps.length}: ${current.action} • ${navigation.distance}m ${navigation.direction} • ${current.hint} • ${current.kind==='sweep'?'Enter the marked zone; no interaction needed':'Press E at the marked equipment'} • ${left} guards alive`:`REACH EXTRACTION • ${navigation.distance}m ${navigation.direction} • ${extractionHint}`;
+    if(current?.kind==='dual'&&state.status==='active')q('.objective').textContent+=` • DATA RACKS ${dualDone.length}/2`;
     if(task && state.status==='active')q('.objective').textContent=`${current.action} • ${Math.ceil(task.remaining)}s • Stay within ${current.radius}m${current.kind==='defend'?' — KEEP FIGHTING; defend the relay':' — nearby threats interrupt'}`;
     if(revive&&state.status==='active')q('.objective').textContent=reviveMessage(revive,getPlayerId());
     q('.start').hidden=!network||state.status!=='waiting'||networkWaiting;
@@ -352,7 +366,7 @@ export function createCampaign({
       );
     ctx.fillStyle = "#84efb6";
     for(const s of m.steps.slice(state.step||0))ctx.fillRect(px(s.position[0])-3,pz(s.position[1])-3,6,6);
-    const activePoint=state.intel?m.extract:m.steps[state.step||0].position;
+    const activePoint=state.intel?m.extract:destination;
     ctx.strokeStyle='#e8d38d';ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(px(player.position.x),pz(player.position.z));ctx.lineTo(px(activePoint[0]),pz(activePoint[1]));ctx.stroke();ctx.setLineDash([]);
     ctx.strokeStyle = "#57d7ff";
     ctx.beginPath();
@@ -383,7 +397,7 @@ export function createCampaign({
     ctx.restore();
     ctx.fillStyle = "#acbdba";
     ctx.font = "10px monospace";
-    const point = state.intel ? m.extract : m.steps[state.step||0].position;
+    const point = state.intel ? m.extract : destination;
     const {distance:mapDistance,direction,degrees}=objectiveNavigation(player.position,point);
     ctx.fillText(
       `${state.intel ? "EXTRACTION" : m.steps[state.step||0].kind.toUpperCase()} ${mapDistance}m ${direction} ${degrees}° | N ↑`,
@@ -412,10 +426,10 @@ export function createCampaign({
       if(next!==state){state=next;playObjective();message('CHECKPOINT SECURED — NEXT INSTALLATION MARKED');}
     }
     smokeClouds=smokeClouds.filter(c=>c.expires>Date.now());
-    if(task){const m=MISSIONS[state.index],point=m.steps[state.step||0].position;
-      const safe=objectiveSafe(m.steps[state.step||0],player.position,enemies.filter(e=>e.hp>0&&e.model.position.distanceTo(player.position)<12).length);
+    if(task){const m=MISSIONS[state.index],current=m.steps[state.step||0],checkStep=current.kind==='dual'?{...current,position:dualNodes(current)[task.node]}:current;
+      const safe=objectiveSafe(checkStep,player.position,enemies.filter(e=>e.hp>0&&e.model.position.distanceTo(player.position)<12).length);
       if(!safe){task=null;message('ACTION INTERRUPTED — return to the marked equipment; clear threats for non-defense tasks');}
-      else {task.remaining-=dt;if(task.remaining<=0){task=null;completeInteraction();}}
+      else {task.remaining-=dt;if(task.remaining<=0){const node=task.node;task=null;if(current.kind==='dual'){const oldStep=state.step;state=recordDualNode({...state,dualDone},node);dualDone=state.dualDone;playObjective();message(state.step!==oldStep?'BOTH DATA RACKS SECURED — NEXT INSTALLATION MARKED':'DATA RACK SECURED — FIND THE SECOND RACK');}else completeInteraction();}}
     }
     const boxes = obstacles.map((o) => [o.x, o.z, o.w, o.h, o.d]);
     for (const e of enemies) {
@@ -513,6 +527,11 @@ export function createCampaign({
     if(!state.intel&&MISSIONS[state.index].steps[state.step||0]?.kind==='sweep'){message('ENTER THE CHECKPOINT ZONE AND CLEAR NEARBY GUARDS');return;}
     const m=MISSIONS[state.index],point=m.steps[state.step||0]?.position||m.extract;
     const threats=enemies.filter(e=>e.hp>0&&e.model.position.distanceTo(player.position)<12).length;
+    if(!state.intel&&m.steps[state.step||0]?.kind==='dual'){
+      const node=availableDualNode(m.steps[state.step||0],player.position,dualDone);
+      if(node<0||threats){message('MOVE WITHIN 2.4m OF AN UNSECURED DATA RACK AND CLEAR NEARBY GUARDS');return;}
+      task={node,remaining:m.steps[state.step||0].duration};paint();return;
+    }
     if(state.intel ? Math.hypot(player.position.x-point[0],player.position.z-point[1])>2.4||threats>0 : !objectiveSafe(m.steps[state.step||0],player.position,threats,true)){message('Press E within 2.4m of the marked equipment. Clear nearby guards for collection, switches, charges and downloads.');return;}
     if(state.intel){completeInteraction();return;}
     task={remaining:m.steps[state.step||0].duration};paint();
@@ -527,12 +546,13 @@ export function createCampaign({
     setNetworkAction(fn){networkAction=fn;},
     sync(snapshot){
       if(!network)return;
-      const previous=state.step;state={index:snapshot.index,status:snapshot.status,step:snapshot.step,intel:snapshot.intel};networkWaiting=snapshot.waiting;task=snapshot.task;revive=snapshot.revive||null;transitionRemaining=snapshot.transitionRemaining??null;
+      const previous=state.step,previousNodes=dualDone.length;state={index:snapshot.index,status:snapshot.status,step:snapshot.step,intel:snapshot.intel};networkWaiting=snapshot.waiting;task=snapshot.task;dualDone=snapshot.dualDone||[];revive=snapshot.revive||null;transitionRemaining=snapshot.transitionRemaining??null;
       for(const data of snapshot.guards){const e=enemies[data.id];if(!e)continue;e.networkMoving=Math.hypot(e.model.position.x-data.x,e.model.position.z-data.z)>.01;const killed=e.hp>0&&data.hp<=0;e.hp=data.hp;if(killed){e.deathAge=0;blood(new THREE.Vector3(data.x,1.1,data.z));}e.model.position.x=data.x;e.model.position.z=data.z;e.model.rotation.y=data.rotation;if(e.hp>0){e.model.position.y=0;e.model.rotation.x=0;}}
       if(networkSynced&&state.step>previous){
         playObjective();
         message(state.intel?'ALL OBJECTIVES SECURED — BOTH PLAYERS GO TO EXTRACTION':'OBJECTIVE COMPLETE — NEXT INSTALLATION MARKED');
       }
+      else if(networkSynced&&state.step===previous&&dualDone.length>previousNodes){playObjective();message('DATA RACK SECURED — FIND THE SECOND RACK');}
       paint();networkSynced=true;
       if(state.status==='failed'){panel.hidden=true;failure.hidden=false;document.exitPointerLock?.();}
       else {panel.hidden=false;failure.hidden=true;}
