@@ -3,13 +3,13 @@ import {clone} from 'three/addons/utils/SkeletonUtils.js';
 import {createWeaponModel} from './weaponModels.js';
 let template;
 const lowerTrack=track=>/Hips|UpLeg|Leg\.|Foot|Toe/.test(track.name);
-export function loadOperator(){return template??=import('three/addons/loaders/GLTFLoader.js').then(({GLTFLoader})=>new GLTFLoader().loadAsync('/assets/characters/operator.glb')).then(gltf=>{gltf.scene.traverse(o=>{if(o.geometry)o.geometry.userData.sharedOperator=true;});return gltf;}).catch(()=>null);}
+export function loadOperator(){return template??=import('three/addons/loaders/GLTFLoader.js').then(({GLTFLoader})=>new GLTFLoader().loadAsync('/assets/characters/operator.glb')).then(gltf=>{gltf.scene.updateMatrixWorld(true);const bounds=new THREE.Box3().setFromObject(gltf.scene);const height=bounds.max.y-bounds.min.y;if(!Number.isFinite(height)||height<1||height>3)throw new Error('Invalid operator source size');gltf.normalization={scale:1.91/height,floor:bounds.min.y};gltf.scene.traverse(o=>{if(o.geometry)o.geometry.userData.sharedOperator=true;});return gltf;}).catch(()=>null);}
 export async function attachRiggedOperator(root,fabric){
  const gltf=await loadOperator();if(!gltf||!root.parent)return false;
  const visual=clone(gltf.scene);visual.name='RiggedOperator';
  const hand=visual.getObjectByName('mixamorigRightHand');if(!hand)return false;
- const bounds=new THREE.Box3().setFromObject(visual),scale=1.91/(bounds.max.y-bounds.min.y);
- visual.scale.setScalar(scale);visual.position.y=-bounds.min.y*scale;visual.rotation.y=Math.PI;
+ const {scale,floor}=gltf.normalization;
+ visual.scale.setScalar(scale);visual.position.y=-floor*scale;visual.rotation.y=Math.PI;
  const fallback=[...root.children];root.add(visual);
  const hidden=new Set(fallback.filter(child=>child!==root.userData.aimRig));root.userData.hiddenParts=hidden;
  for(const child of hidden)child.visible=false;
