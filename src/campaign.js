@@ -29,6 +29,7 @@ import {
   approachCover,
   freightCargo,
   checkpointGate,
+  defenseRallyPoint,
   guardSpawn,
   campaignObstacles,
   interactMission,
@@ -521,13 +522,13 @@ export function createCampaign({
       const distance = eye.distanceTo(target),
         visible = distance < guardSightRange(state.index,state.step||0) && lineClear(eye, target);
       const defense=task&&MISSIONS[state.index].steps[state.step||0]?.kind==='defend';
-      const rally=defense&&e.model.position.distanceTo(player.position)<60;
+      const rally=defenseRallyPoint(state.index,state.step,!!defense,e.model.position);
       const sabotage=sabotageInvestigation(state.index,state.step,e.model.position);
       if(visible&&e.hp<=50&&!defense&&time>=(e.nextCoverAttempt||0)){e.coverTarget=findGuardCover(e.model.position,player.position,boxes);e.coverUntil=time+2.5;e.nextCoverAttempt=time+10;}
       const cover=e.coverTarget&&time<e.coverUntil?e.coverTarget:null;
       const dest = cover?new THREE.Vector3(cover.x,0,cover.z):visible
         ? player.position
-        : rally?player.position:e.alertUntil>time ? e.lastKnown : sabotage?new THREE.Vector3(sabotage.x,0,sabotage.z):e.home
+        : rally?new THREE.Vector3(rally.x,0,rally.z):e.alertUntil>time ? e.lastKnown : sabotage?new THREE.Vector3(sabotage.x,0,sabotage.z):e.home
             .clone()
             .add(
               new THREE.Vector3(

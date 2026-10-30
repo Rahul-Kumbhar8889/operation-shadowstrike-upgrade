@@ -92,3 +92,12 @@ test('dispatch recovery opens the shared physical gate and restart closes it aga
  assert.equal(blocked(gate[0],gate[1],c.boxes),false);assert.equal(coopSnapshot(r).step,2);
  assert.ok(blocked(gate[0],gate[1],createCoop(0).boxes));
 });
+
+test('active railway relay attracts surviving patrols beyond the previous 60m range',()=>{
+ const r=room(0),c=r.coop;c.status='active';c.step=5;c.boxes=[];
+ const [x,z]=MISSIONS[0].steps[5].position;
+ for(const p of r.players.values())p.position={x,z};
+ const g={id:0,x:x-90,z,homeX:x-90,homeZ:z,hp:100,rotation:0,lastFire:0,phase:0};c.guards=[g];
+ assert.ok(interactCoop(r,'a'));updateCoop(r,.5,0,noWall,()=>{});
+ assert.ok(g.x>x-90);assert.equal(c.task.remaining,44.5);assert.equal(c.step,5);
+});

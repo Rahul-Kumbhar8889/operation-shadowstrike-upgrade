@@ -2,7 +2,7 @@ import {test} from 'node:test';import assert from 'node:assert/strict';import {M
 test('approach barriers provide shared standing-height cover without blocking entrances',()=>{
  for(const [index,site] of [[0,2],[1,3],[2,2],[3,4]]){
   const m=MISSIONS[index],layout=installationLayout(m,site),[x,z]=m.sites[site],boxes=campaignObstacles(m),cover=approachCover(m);
-  assert.equal(cover.length,2);
+  assert.equal(cover.length,index===0?4:2);
   for(const box of cover){assert.ok(box[3]>1.7);assert.ok(boxes.some(b=>b.every((v,i)=>v===box[i])));assert.ok(blocked(box[0],box[1],boxes));}
   for(let dz=layout.d/2+1;dz<=layout.d/2+14;dz+=.5)assert.equal(blocked(x+layout.doorOffset,z+dz,boxes),false,`${m.name} front approach`);
  }

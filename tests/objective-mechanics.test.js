@@ -9,7 +9,7 @@ test('four operations contain distinct equipment mechanics with explicit task ru
 test('defense starts at equipment but permits fighting and moving inside the hold area',()=>{
  const index=0,c=createCoop(index);c.status='active';c.step=MISSIONS[index].steps.findIndex(s=>s.kind==='defend');const s=MISSIONS[index].steps[c.step], [x,z]=s.position;
  const p={position:{x,z},alive:true,hp:1000,kills:0,deaths:0};const room={coop:c,players:new Map([['a',p],['b',{...p,position:{x:x+20,z}}]]),smokes:[]};c.guards=[{id:0,x:x+5,z,homeX:x+5,homeZ:z,hp:100,phase:0,lastFire:0}];
- assert.ok(interactCoop(room,'a'),'nearby guard does not block defense');p.position={x:x+10,z};updateCoop(room,2,2000,()=>Infinity,()=>{});assert.equal(c.task.remaining,23);assert.equal(p.hp,930,'combat continues during hold');
+ assert.ok(interactCoop(room,'a'),'nearby guard does not block defense');p.position={x:x+10,z};updateCoop(room,2,2000,()=>Infinity,()=>{});assert.equal(c.task.remaining,s.duration-2);assert.equal(p.hp,930,'combat continues during hold');
  p.position={x:x+15,z};updateCoop(room,.1,2100,()=>Infinity,()=>{});assert.equal(c.task,null,'leaving defense radius cancels');assert.equal(c.step,0+MISSIONS[index].steps.findIndex(s=>s.kind==='defend'));
  assert.equal(objectiveSafe(s,{x:x+10,z},0,true),false,'cannot remotely begin hold');
 });
