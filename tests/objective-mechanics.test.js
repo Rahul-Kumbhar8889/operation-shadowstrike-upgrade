@@ -31,7 +31,7 @@ test('railway CCTV objective changes server guard detection without changing oth
  assert.equal(guardSightRange(1,1),23);assert.equal(guardSightRange(0,0),23);assert.equal(guardSightRange(0,1),16);
 });
 test('each operation gains its intended tactical effect only after its relevant objective',()=>{
- const cases=[[0,1],[1,3],[2,2],[3,2]];
+ const cases=[[0,1],[1,2],[2,2],[3,2]];
  for(const [index,step] of cases){assert.equal(activeOperationEffect(index,step-1),'');assert.ok(activeOperationEffect(index,step));assert.equal(activeOperationEffect(index,0),'');}
  assert.equal(guardResponseMultiplier(1,2),1);assert.equal(guardResponseMultiplier(1,3),.65);
  assert.equal(guardResponseMultiplier(2,1),1);assert.equal(guardResponseMultiplier(2,2),.55);

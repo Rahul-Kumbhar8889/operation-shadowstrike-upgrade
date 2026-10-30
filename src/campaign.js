@@ -62,7 +62,7 @@ export function createCampaign({
     colliders = [],
     time = 0,
     exit = () => {},
-    beacon, waypoint=null,waypointRing=null,waypointClock=0,gateCollider=null,flyover=null,flyoverTime=0,surveillanceLamp=null, task=null,revive=null, holdRemaining=null,chargeRemaining=null, dualDone=[], smokeClouds=[],network=false,networkWaiting=false,networkSynced=false,networkAction=()=>{},transitionRemaining=null,objectiveProps=[],completedEffects=new Set();
+    beacon, waypoint=null,waypointRing=null,waypointClock=0,gateCollider=null,flyover=null,flyoverTime=0,surveillanceLamp=null, installationLights=[], task=null,revive=null, holdRemaining=null,chargeRemaining=null, dualDone=[], smokeClouds=[],network=false,networkWaiting=false,networkSynced=false,networkAction=()=>{},transitionRemaining=null,objectiveProps=[],completedEffects=new Set();
   const ray = new THREE.Raycaster(),
     panel = document.createElement("section");
   panel.id = "missionPanel";
@@ -130,7 +130,7 @@ export function createCampaign({
     for(const o of baseWorld)o.visible=false;
     failure.hidden = true;transitionRemaining=null;
     state = { index, status: "active", intel: false, step:0 };
-    time = 0;waypointClock=0;task=null;revive=null;holdRemaining=null;chargeRemaining=null;dualDone=[];smokeClouds=[];objectiveProps=[];surveillanceLamp=null;completedEffects.clear();
+    time = 0;waypointClock=0;task=null;revive=null;holdRemaining=null;chargeRemaining=null;dualDone=[];smokeClouds=[];objectiveProps=[];surveillanceLamp=null;installationLights=[];completedEffects.clear();
     group.visible = true;
     panel.hidden = false;
     const m = MISSIONS[index];
@@ -220,6 +220,7 @@ export function createCampaign({
     const light = new THREE.PointLight(0xc6dec9, 18, 11);
     light.position.set(x, 2.8, z);
     group.add(light);
+    if(index===1)installationLights.push(light);
     const labelCanvas=document.createElement('canvas');labelCanvas.width=512;labelCanvas.height=64;
     const ctx=labelCanvas.getContext('2d');ctx.fillStyle='#14251d';ctx.fillRect(0,0,512,64);ctx.fillStyle='#d9e5ca';ctx.font='bold 24px monospace';ctx.textAlign='center';ctx.fillText(`${i+1} / ${m.actions[i]}`,256,42);
     const texture=new THREE.CanvasTexture(labelCanvas);texture.colorSpace=THREE.SRGBColorSpace;
@@ -378,12 +379,13 @@ export function createCampaign({
     q("h2").textContent = m.name;
     q(".brief").textContent = state.status==='complete'?m.debrief:m.brief;
     const step=state.step||0, current=m.steps[step];
-    if(gateCollider){const closed=step<2;gateCollider.mesh.visible=closed;const i=obstacles.indexOf(gateCollider);if(!closed&&i>=0)obstacles.splice(i,1);}
+    if(gateCollider){const closed=!!checkpointGate(m,step);gateCollider.mesh.visible=closed;const i=obstacles.indexOf(gateCollider);if(!closed&&i>=0)obstacles.splice(i,1);}
 
     if(state.status==='active'&&!(network&&networkWaiting))radio.announce(`${state.index}:${step}:${dualDone.join(',')}`,current?`Command. ${current.action}. ${current.hint}`:'Command. Objectives complete. Proceed to extraction and clear nearby guards.');
     if(state.status==='complete')radio.announce(`${state.index}:complete`,m.debrief);
     if(state.status==='failed')radio.announce(`${state.index}:failed`,'Command. Mission failed. Regroup and restart the operation.');
     const effect=activeOperationEffect(state.index,step),effectLabel=q('.operation-effect');effectLabel.textContent=effect;effectLabel.hidden=!effect;
+    for(const light of installationLights)light.intensity=step>=2?0:18;
     if(surveillanceLamp){surveillanceLamp.material.color.set(step>0?0x43514a:0xff5945);surveillanceLamp.material.emissive.set(step>0?0x000000:0x8a1408);}
     const progress=q('.task-progress');progress.hidden=!task&&!revive&&holdRemaining===null;progress.value=revive?Math.max(0,1-revive.remaining/4):task&&current?Math.max(0,1-task.remaining/current.duration):holdRemaining!==null&&current?Math.max(0,1-holdRemaining/current.duration):0;
     const plan=q('.operation-plan ol');

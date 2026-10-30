@@ -2,7 +2,7 @@ import {defenseRallyPoint,checkpointGate,sabotageInvestigation,installationLayou
 import {smokeBlocks,blastDamage} from '../shared/equipment.js';
 import {guardStep,findGuardCover} from '../shared/guardTactics.js';
 export function createCoop(index=0){
- const mission=MISSIONS[index],boxes=campaignObstacles(mission);return {index,gateClosed:index===0,status:'waiting',step:0,intel:false,task:null,tick:0,revision:0,transitionRemaining:null,revive:null,boxes,guards:mission.guards.map((position,id)=>{const [x,z]=guardSpawn(position,boxes);return {id,x,z,homeX:x,homeZ:z,hp:100,rotation:0,lastFire:0,phase:id*2};})};
+ const mission=MISSIONS[index],boxes=campaignObstacles(mission);return {index,gateClosed:!!checkpointGate(mission),status:'waiting',step:0,intel:false,task:null,tick:0,revision:0,transitionRemaining:null,revive:null,boxes,guards:mission.guards.map((position,id)=>{const [x,z]=guardSpawn(position,boxes);return {id,x,z,homeX:x,homeZ:z,hp:100,rotation:0,lastFire:0,phase:id*2};})};
 }
 export function coopSnapshot(room){const c=room.coop;return {index:c.index,status:c.status,step:c.step,intel:c.intel,dualDone:c.dualDone||[],holdRemaining:c.holdRemaining??null,chargeRemaining:c.chargeRemaining??null,task:c.task?{remaining:c.task.remaining,node:c.task.node}:null,revive:c.revive?{remaining:c.revive.remaining,targetId:c.revive.targetId}:null,revision:c.revision,transitionRemaining:c.transitionRemaining,waiting:room.players.size<2,guards:c.guards.map(({id,x,z,hp,rotation})=>({id,x,z,hp,rotation}))};}
 export function coopSpawn(c,slot){const [x,z]=MISSIONS[c.index].building;return {x:x+installationLayout(MISSIONS[c.index]).doorOffset+slot*2,y:0,z:z+34};}
@@ -60,7 +60,7 @@ export function updateCoop(room,dt,now,rayBox,emit){
   if(!p?.alive||!objectiveSafe(checkStep,p.position,c.guards.filter(g=>g.hp>0&&Math.hypot(g.x-p.position.x,g.z-p.position.z)<12).length)){const id=c.task.id;c.task=null;emit('coop-action-interrupted',{id,reason:'objective_interrupted'});}
   else {c.task.remaining-=dt;if(c.task.remaining<=0){if(step.kind==='dual'){const next=recordDualNode(c,node);c.dualDone=next.dualDone;c.step=next.step;}else if(step.kind==='timedcharge')c.chargeRemaining=CHARGE_FUSE_SECONDS;else c.step++;c.intel=c.step===MISSIONS[c.index].steps.length;c.task=null;c.revision++;}}
  }
- if(c.gateClosed&&c.step>=2){const gate=checkpointGate(MISSIONS[c.index],0);c.boxes=c.boxes.filter(box=>!gate.every((v,i)=>box[i]===v));c.gateClosed=false;}
+ if(c.gateClosed&&!checkpointGate(MISSIONS[c.index],c.step)){const gate=checkpointGate(MISSIONS[c.index],0);c.boxes=c.boxes.filter(box=>!gate.every((v,i)=>box[i]===v));c.gateClosed=false;}
  for(const g of c.guards){if(g.hp<=0)continue;
   const visible=living.filter(([,p])=>p.alive).map(([id,p])=>({id,p,d:Math.hypot(p.position.x-g.x,p.position.z-g.z)})).filter(t=>t.d<guardSightRange(c.index,c.step)&&sight(c,{x:g.x,z:g.z},t.p.position,rayBox,room.smokes)).sort((a,b)=>a.d-b.d)[0];
   const defense=c.task&&MISSIONS[c.index].steps[c.step]?.kind==='defend';

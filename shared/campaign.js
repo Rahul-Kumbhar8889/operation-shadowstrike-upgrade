@@ -22,7 +22,7 @@ MISSIONS.push({name:'04 / IRON HORIZON',brief:'Penetrate the airfield perimeter,
 // A single original investigation connects the existing playable operations.
 const campaignStory=[
  {brief:'A covert supply network is moving restricted cargo by rail. Infiltrate the freight compound, recover its transport manifest and transmit the evidence to command.',debrief:'The manifest identifies an encrypted communications relay. Command has marked the signal station for your next operation.'},
- {brief:'The railway manifest leads to an encrypted signal station. Infiltrate the facility and copy its data before shutting down the uplink and radar network.',debrief:'The intercepted data points to a detention district holding the network’s evacuation records. Move to the night operation.'},
+ {brief:'The railway manifest leads to an encrypted signal station. Recover generator access, cut power and disrupt the uplink, then copy the encryption data and shut down the radar network.',debrief:'The intercepted data points to a detention district holding the network’s evacuation records. Move to the night operation.'},
  {brief:'The intercepted transmissions expose a detention district linked to the cargo network. Secure its records, disrupt the command archive and recover the evacuation dossier.',debrief:'The dossier reveals an airfield used to move the cargo. Command has located the final operation at Iron Horizon.'},
  {brief:'The evacuation dossier leads to the network’s airfield. Disable its defences, recover the flight records and sabotage the fuel operation before extraction.',debrief:'The flight records and command intelligence are secure. The cargo network has been disrupted and the operation is complete.'}
 ];
@@ -31,7 +31,7 @@ for(const m of MISSIONS){m.steps=m.sites.map(([x,z],i)=>({position:[x,z-2],actio
 // Objective mechanics are shared by solo and the authoritative co-op server.
 const operationPlans = [
  [['switch','ISOLATE CCTV','Cut the security feed to reduce guard detection range across the compound.'],['recover','SEIZE DISPATCH CODES','Recover the dispatch case from the warehouse to unlock the freight checkpoint gate.'],['sweep','CLEAR FREIGHT CHECKPOINT','Enter the checkpoint zone and eliminate guards within 14m of its center.'],['timedcharge','SABOTAGE FREIGHT FUEL','Plant the charge and retreat beyond 12m before the 10-second fuse expires. Nearby patrols will investigate the blast while you recover the manifest.'],['recover','RECOVER TRANSPORT MANIFEST','Collect the transport dossier.'],['defend','TRANSMIT FIELD EVIDENCE','Hold the relay within 14m for 45 seconds. The transmission draws surviving patrols from up to 120m away; use the relay barricades and cover your teammate.']],
- [['recover','ACQUIRE SECURITY KEYCARD','Take the access card from the security office.'],['switch','CUT GENERATOR POWER','Isolate the generator breaker.'],['plant','DESTROY UPLINK CONTROL','Rig the uplink; disrupting communications reduces the guard response radius to gunfire.'],['dual','COPY ENCRYPTION NODES','Secure both data racks separately; clear nearby guards and press E at each rack.'],['switch','SHUT DOWN RADAR','Cut the radar tracking circuit.'],['defend','HOLD EMERGENCY RELAY','Protect the relay during the final transmission.']],
+ [['recover','ACQUIRE SECURITY KEYCARD','Take the access card from the security office to unlock the generator entrance.'],['switch','CUT GENERATOR POWER','Isolate the generator breaker to extinguish installation lights and reduce guard detection range.'],['plant','DESTROY UPLINK CONTROL','Rig the uplink; disrupting communications reduces the guard response radius to gunfire.'],['dual','COPY ENCRYPTION NODES','Secure both data racks separately; clear nearby guards and press E at each rack.'],['switch','SHUT DOWN RADAR','Cut the radar tracking circuit.'],['defend','HOLD EMERGENCY RELAY','Protect the relay during the final transmission.']],
  [['recover','RECOVER ACCESS CODES','Collect the command access case.'],['switch','DISABLE BASE ALARM','Disconnect the alarm to reduce the guard response radius to gunfire.'],['rendezvous','SECURE DETENTION YARD','All living squad members must hold the marked yard for 8 seconds after clearing nearby guards.'],['defend','SECURE HANGAR OVERRIDE','Defend the hangar controls until the route opens.'],['plant','DEMOLISH COMMAND ARCHIVE','Place a charge on the archive controller.'],['recover','RECOVER EVACUATION DOSSIER','Take the evacuation dossier before extraction.']],
  [['switch','BREACH PERIMETER CONTROL','Open the airfield security circuit.'],['plant','SABOTAGE AIRFIELD RADAR','Rig the radar to reduce guard detection range across the airfield.'],['switch','CUT RUNWAY POWER','Isolate the runway lighting breaker.'],['recover','RECOVER FLIGHT RECORDS','Take the flight recorder case.'],['timedcharge','SABOTAGE FUEL PUMPS','Plant the charge, then move beyond 12m before the 10-second detonation.'],['download','DOWNLOAD COMMAND INTELLIGENCE','Stay at the server to copy the command archive.'],['defend','HOLD EXTRACTION CORRIDOR','Defend the corridor override until extraction is cleared.']]
 ];
@@ -82,12 +82,13 @@ export function recordDualNode(state,node){
  const next=[...done,node];return next.length===2?{...state,step:(state.step||0)+1,dualDone:[],intel:(state.step||0)+1===MISSIONS[state.index].steps.length}:{...state,dualDone:next};
 }
 // Cutting the railway compound's CCTV gives the team a tangible stealth advantage.
-// Later missions use their existing standard detection distance.
-export function guardSightRange(missionIndex,step){return missionIndex===0&&step>0?16:missionIndex===3&&step>=2?19:23;}
+// Signal-station power and airfield radar also affect detection.
+export function guardSightRange(missionIndex,step){return missionIndex===0&&step>0?16:missionIndex===1&&step>=2?18:missionIndex===3&&step>=2?19:23;}
 export function guardResponseMultiplier(missionIndex,step){return missionIndex===1&&step>=3?.65:missionIndex===2&&step>=2?.55:1;}
 export function activeOperationEffect(missionIndex,step){
  if(missionIndex===0&&step>0)return step===4?'CCTV OFF • PATROLS INVESTIGATING FUEL SABOTAGE':'CCTV OFF • GUARD DETECTION REDUCED';
- if(missionIndex===1&&step>=3)return 'UPLINK DISRUPTED • GUARD RESPONSE RADIUS REDUCED';
+ if(missionIndex===1&&step>=3)return 'POWER OFF • DETECTION REDUCED • UPLINK DISRUPTED';
+ if(missionIndex===1&&step>=2)return 'POWER OFF • GUARD DETECTION REDUCED';
  if(missionIndex===2&&step>=2)return 'ALARM OFF • GUARD RESPONSE RADIUS REDUCED';
  if(missionIndex===3&&step>=2)return 'RADAR OFF • GUARD DETECTION REDUCED';
  return '';
@@ -193,10 +194,11 @@ export function freightCargo(m){
  return [-7,7].flatMap(dx=>[-5,5].map(dz=>[x+dx,z+dz,3,2.2,2.4])).concat([[x-8,z+15,4,2.2,2.4],[x+8,z+18,4,2.2,2.4]]);
 }
 
-// The recovered dispatch codes unlock the freight checkpoint front entrance.
+// Recovered credentials unlock the freight checkpoint or generator entrance.
 export function checkpointGate(m,step=0){
- if(MISSIONS.indexOf(m)!==0||step>=2)return null;
- const [x,z]=m.sites[2],layout=installationLayout(m,2);
+ const index=MISSIONS.indexOf(m),site=index===0?2:index===1?1:null,unlock=index===0?2:1;
+ if(site===null||step>=unlock)return null;
+ const [x,z]=m.sites[site],layout=installationLayout(m,site);
  return [x,z+layout.d/2,2,3.4,.3];
 }
 
