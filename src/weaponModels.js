@@ -53,6 +53,21 @@ export function createWeaponModel(id){
   }
   if(sniper){box(.10,.08,.12,polymer,0,.06,.38);tube(.018,.13,trim,.14,.02,-.14);}
   if(id==='battle')box(.13,.29,.19,polymer,0,-.24,-.35);
+  if(id==='assault'){
+   // Original AR-4 detailing: curved receiver shoulders, rail, vents and fittings.
+   // These are part of the existing merged materials and do not affect hitboxes.
+   tube(.078,.50,steel,0,.045,-.25);
+   box(.075,.025,.76,rubber,0,.135,-.42);
+   for(let n=0;n<13;n++)box(.09,.012,.018,trim,0,.151,-.07-n*.055);
+   for(const side of [-1,1]){
+    for(let n=0;n<7;n++)box(.009,.024,.038,rubber,side*.078,.038,-.62-n*.055);
+    for(const z of [-.14,-.40])add(new THREE.SphereGeometry(.013,8,6),trim,side*.08,.055,z);
+    box(.015,.028,.09,trim,side*.078,-.04,-.16);
+   }
+   for(let n=0;n<5;n++)box(.107,.018,.145,rubber,0,-.20-n*.034,-.34);
+   tube(.033,.16,steel,0,.035,-1.43);
+   for(let n=0;n<3;n++)ring(.034,.006,rubber,0,.035,-1.48-n*.025);
+  }
  }
  for(const [material,geometries] of batches){const flat=geometries.map(g=>g.index?g.toNonIndexed():g);const geometry=mergeGeometries(flat);for(const g of new Set([...geometries,...flat]))g.dispose();geometry.userData.sharedWeapon=true;const mesh=new THREE.Mesh(geometry,material);mesh.castShadow=true;root.add(mesh);}
  root.userData.weaponId=id;templates.set(id,root);return root.clone(true);
