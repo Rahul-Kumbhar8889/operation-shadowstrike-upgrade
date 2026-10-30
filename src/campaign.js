@@ -4,6 +4,7 @@ import {addGuardDetail} from './guardDetail.js';
 import {missionWaypoint,objectiveNavigation} from './navigation.js';
 import {reviveMessage,teammateMessage,extractionMessage} from './missionFeedback.js';
 import {createMissionRadio} from './missionRadio.js';
+import {createExtractionFlyover} from './extractionFlyover.js';
 import {guardStep,findGuardCover} from '../shared/guardTactics.js';
 import { blastDamage, smokeBlocks } from '../shared/equipment.js';
 import { playGunshotAt, playObjective } from './combatEffects.js';
@@ -57,7 +58,7 @@ export function createCampaign({
     colliders = [],
     time = 0,
     exit = () => {},
-    beacon, waypoint=null,waypointRing=null,waypointClock=0,surveillanceLamp=null, task=null,revive=null, holdRemaining=null,chargeRemaining=null, dualDone=[], smokeClouds=[],network=false,networkWaiting=false,networkSynced=false,networkAction=()=>{},transitionRemaining=null,objectiveProps=[],completedEffects=new Set();
+    beacon, waypoint=null,waypointRing=null,waypointClock=0,flyover=null,flyoverTime=0,surveillanceLamp=null, task=null,revive=null, holdRemaining=null,chargeRemaining=null, dualDone=[], smokeClouds=[],network=false,networkWaiting=false,networkSynced=false,networkAction=()=>{},transitionRemaining=null,objectiveProps=[],completedEffects=new Set();
   const ray = new THREE.Raycaster(),
     panel = document.createElement("section");
   panel.id = "missionPanel";
@@ -113,6 +114,7 @@ export function createCampaign({
     gs.forEach((g) => g.dispose());
     ms.forEach((m) => {if(m.map?.isCanvasTexture && !Object.values(textures).includes(m.map))m.map.dispose();m.dispose();});
     group.clear();
+    flyover=null;flyoverTime=0;
     scene.background=baseAtmosphere.background??null;
     if(baseAtmosphere.fog)scene.fog=baseAtmosphere.fog.clone();
     for(const {light,color,intensity} of baseAtmosphere.lights){light.color.copy(color);light.intensity=intensity;}
@@ -330,6 +332,7 @@ export function createCampaign({
       m.extract[1],
     );
     beacon.rotation.x = Math.PI / 2;
+    flyover=createExtractionFlyover(m.extract);group.add(flyover.aircraft);
     // The suspended marker identifies the active installation without adding a collider.
     waypoint=mesh(new THREE.OctahedronGeometry(.55,0),0x62edb9,0,6,0);
     waypoint.material.emissive.setHex(0x197d5c);
@@ -468,6 +471,11 @@ export function createCampaign({
     ).length;
   }
   function update(dt, running) {
+    if(flyover&&state.status==='complete'){
+      flyoverTime+=dt;
+      const progress=network&&transitionRemaining!==null?1-transitionRemaining/5:flyoverTime/5;
+      flyover.update(progress,dt);
+    }
     if(waypoint&&waypointRing){waypointClock+=dt;waypoint.position.y=6+Math.sin(waypointClock*2)*.2;waypoint.rotation.y+=dt;waypointRing.rotation.z+=dt*.6;}
     for(const e of enemies){if(e.hp<=0){e.deathAge=(e.deathAge||0)+dt;applyDeathPose(e.model,e.deathAge);}e.detail(e.model.position.distanceTo(player.position),e.hp<=0,e.deathAge||0);}
     if(!network&&state.status==='complete'&&transitionRemaining!==null){transitionRemaining-=dt;if(transitionRemaining<=0){start(state.index+1);return;}paint();}
