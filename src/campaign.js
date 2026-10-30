@@ -357,7 +357,7 @@ export function createCampaign({
     teamLabel.hidden=!teammate;teamLabel.textContent=teammate?teammateMessage(player.position,teammate):'';
     teamLabel.classList.toggle('down',teammate?.alive===false);
     q("h2").textContent = m.name;
-    q(".brief").textContent = m.brief;
+    q(".brief").textContent = state.status==='complete'?m.debrief:m.brief;
     const step=state.step||0, current=m.steps[step];
     const effect=activeOperationEffect(state.index,step),effectLabel=q('.operation-effect');effectLabel.textContent=effect;effectLabel.hidden=!effect;
     if(surveillanceLamp){surveillanceLamp.material.color.set(step>0?0x43514a:0xff5945);surveillanceLamp.material.emissive.set(step>0?0x000000:0x8a1408);}

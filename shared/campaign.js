@@ -19,6 +19,14 @@ MISSIONS.push({name:'04 / IRON HORIZON',brief:'Penetrate the airfield perimeter,
  building:[-120,100],sites:[[-120,100],[-70,45],[15,85],[95,35],[65,-45],[-20,-85],[-110,-110]],extract:[120,-125],
  actions:['BREACH PERIMETER CONTROL','DISABLE AIRFIELD RADAR','CUT RUNWAY POWER','RECOVER FLIGHT RECORDS','SABOTAGE FUEL PUMPS','DOWNLOAD COMMAND INTELLIGENCE','UNLOCK EXTRACTION CORRIDOR'],
  guards:[[-120,100],[-114,107],[-70,45],[-64,52],[15,85],[21,92],[95,35],[101,42],[65,-45],[71,-38],[-20,-85],[-14,-78],[-110,-110],[-104,-103],[40,5],[-45,-20],[110,-115],[125,-120],[118,-132],[100,-125]],damage:GUARD_BULLET_DAMAGE});
+// A single original investigation connects the existing playable operations.
+const campaignStory=[
+ {brief:'A covert supply network is moving restricted cargo by rail. Infiltrate the freight compound, recover its transport manifest and transmit the evidence to command.',debrief:'The manifest identifies an encrypted communications relay. Command has marked the signal station for your next operation.'},
+ {brief:'The railway manifest leads to an encrypted signal station. Infiltrate the facility and copy its data before shutting down the uplink and radar network.',debrief:'The intercepted data points to a detention district holding the network’s evacuation records. Move to the night operation.'},
+ {brief:'The intercepted transmissions expose a detention district linked to the cargo network. Secure its records, disrupt the command archive and recover the evacuation dossier.',debrief:'The dossier reveals an airfield used to move the cargo. Command has located the final operation at Iron Horizon.'},
+ {brief:'The evacuation dossier leads to the network’s airfield. Disable its defences, recover the flight records and sabotage the fuel operation before extraction.',debrief:'The flight records and command intelligence are secure. The cargo network has been disrupted and the operation is complete.'}
+];
+for(let i=0;i<MISSIONS.length;i++)Object.assign(MISSIONS[i],campaignStory[i]);
 for(const m of MISSIONS){m.steps=m.sites.map(([x,z],i)=>({position:[x,z-2],action:m.actions[i],duration:i%3===1?10:i%3===2?6:3}));m.objective=m.steps[0].position;m.action=m.actions[0];}
 // Objective mechanics are shared by solo and the authoritative co-op server.
 const operationPlans = [
