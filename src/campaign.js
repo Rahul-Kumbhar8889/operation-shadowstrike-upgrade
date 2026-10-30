@@ -3,6 +3,7 @@ import {applyDeathPose} from './deathPose.js';
 import {addGuardDetail} from './guardDetail.js';
 import {missionWaypoint,objectiveNavigation} from './navigation.js';
 import {reviveMessage,teammateMessage,extractionMessage} from './missionFeedback.js';
+import {createMissionRadio} from './missionRadio.js';
 import {guardStep,findGuardCover} from '../shared/guardTactics.js';
 import { blastDamage, smokeBlocks } from '../shared/equipment.js';
 import { playGunshotAt, playObjective } from './combatEffects.js';
@@ -64,6 +65,10 @@ export function createCampaign({
   panel.innerHTML =
     '<small>SHADOWSTRIKE / FIELD OPERATIONS</small><h2></h2><p class="brief"></p><p class="objective"></p><p class="teammate-status" hidden></p><p class="operation-effect" hidden></p><progress class="task-progress" max="1" value="0" hidden aria-label="Objective action progress"></progress><details class="operation-plan"><summary>OPERATION PLAN</summary><ol></ol></details><canvas class="radar" width="280" height="150" aria-label="Tactical map: blue player, yellow teammate, red guards, green terminal, cyan extraction"></canvas><p>E interact • V camera • Esc release cursor</p><button class="start" hidden>START CO-OP MISSION</button><button class="next" hidden>NEXT OPERATION</button><button class="retry">RESTART MISSION</button><button class="exit">RETURN TO MENU</button>';
   document.body.append(panel);
+  const radio=createMissionRadio(window.speechSynthesis,window.SpeechSynthesisUtterance);
+  const radioButton=document.createElement('button');radioButton.type='button';radioButton.textContent=radio.available?'RADIO VOICE OFF':'RADIO VOICE UNAVAILABLE';radioButton.disabled=!radio.available;radioButton.setAttribute('aria-pressed','false');
+  panel.append(radioButton);
+  radioButton.onclick=()=>{const enabled=radio.setEnabled(!radio.enabled);radioButton.textContent=enabled?'RADIO VOICE ON':'RADIO VOICE OFF';radioButton.setAttribute('aria-pressed',String(enabled));paint();};
   const failure = document.createElement("section");
   failure.id = "missionFailure";
   failure.hidden = true;
@@ -91,6 +96,7 @@ export function createCampaign({
     return o;
   }
   function cleanup() {
+    radio.stop();
     materialGeneration++;
     for (const o of colliders) {
       const i = obstacles.indexOf(o);
@@ -359,6 +365,9 @@ export function createCampaign({
     q("h2").textContent = m.name;
     q(".brief").textContent = state.status==='complete'?m.debrief:m.brief;
     const step=state.step||0, current=m.steps[step];
+    if(state.status==='active'&&!(network&&networkWaiting))radio.announce(`${state.index}:${step}:${dualDone.join(',')}`,current?`Command. ${current.action}. ${current.hint}`:'Command. Objectives complete. Proceed to extraction and clear nearby guards.');
+    if(state.status==='complete')radio.announce(`${state.index}:complete`,m.debrief);
+    if(state.status==='failed')radio.announce(`${state.index}:failed`,'Command. Mission failed. Regroup and restart the operation.');
     const effect=activeOperationEffect(state.index,step),effectLabel=q('.operation-effect');effectLabel.textContent=effect;effectLabel.hidden=!effect;
     if(surveillanceLamp){surveillanceLamp.material.color.set(step>0?0x43514a:0xff5945);surveillanceLamp.material.emissive.set(step>0?0x000000:0x8a1408);}
     const progress=q('.task-progress');progress.hidden=!task&&!revive&&holdRemaining===null;progress.value=revive?Math.max(0,1-revive.remaining/4):task&&current?Math.max(0,1-task.remaining/current.duration):holdRemaining!==null&&current?Math.max(0,1-holdRemaining/current.duration):0;
