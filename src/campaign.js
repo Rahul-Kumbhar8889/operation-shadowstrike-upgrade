@@ -27,6 +27,7 @@ import {
   chargeDamageAt,
   installationLayout,
   approachCover,
+  freightCargo,
   guardSpawn,
   campaignObstacles,
   interactMission,
@@ -281,6 +282,10 @@ export function createCampaign({
     for(const [x,z,w,h,d] of approachCover(m)){
       const barrier=prop(x,z,w,h,d,0x777e70);barrier.material.map=textures.concrete;barrier.userData.surface='concrete';
       for(const dx of [-w*.35,w*.35])mesh(new THREE.BoxGeometry(.09,h,.08),0x515b51,x+dx,h/2,z+d/2+.05);
+    }
+    for(const [x,z,w,h,d] of freightCargo(m)){
+      const cargo=prop(x,z,w,h,d,0x58644b);cargo.userData.surface='metal';
+      for(const dx of [-w*.35,w*.35])mesh(new THREE.BoxGeometry(.08,h,.035),0x354038,x+dx,h/2,z+d/2+.025);
     }
     for(let n=0;n<5;n++){const tank=mesh(new THREE.CylinderGeometry(1.4,1.4,3.2,16),0x818575,45+n*4,1.6,-5);tank.material.metalness=.4;tank.userData.surface='metal';const item={x:45+n*4,z:-5,w:2.8,h:3.2,d:2.8,mesh:tank};obstacles.push(item);colliders.push(item);}
     const radarBase=prop(-45,110,5,6,5,0x657269);

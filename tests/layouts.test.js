@@ -41,7 +41,7 @@ test('fuel depot has a reachable escape route from the charge',()=>{
  assert.ok(escaped,'there is a route beyond the blast radius');
 });
 test('expanded mission sites provide a second traversable route to every objective',()=>{
- for(const [index,site] of [[0,2],[1,3],[2,2],[3,4]]){
+ for(const [index,site] of [[0,1],[0,2],[0,4],[1,3],[2,2],[3,4]]){
   const m=MISSIONS[index],layout=installationLayout(m,site),[x,z]=m.sites[site],boxes=campaignObstacles(m);
   const goals=m.steps[site].kind==='dual'?dualNodes(m.steps[site]):[m.steps[site].position];
   assert.equal(layout.sideEntry,2);const start=[x-layout.w/2-1,z+layout.sideEntry];assert.equal(blocked(...start,boxes),false);
@@ -51,4 +51,10 @@ test('expanded mission sites provide a second traversable route to every objecti
    for(const [dx,dz] of [[.5,0],[-.5,0],[0,.5],[0,-.5]]){const px=a+dx,pz=b+dz;if(Math.abs(px-x)<=layout.w/2+3&&Math.abs(pz-z)<=layout.d/2+3&&!blocked(px,pz,boxes))queue.push([px,pz]);}}
   assert.equal(reached.size,goals.length,`${m.name} side entry reaches its objective`);
  }
+});
+
+test('freight warehouse and archive have larger traversable floor plans',()=>{
+ const m=MISSIONS[0];assert.equal(installationLayout(m,1).w,24);assert.equal(installationLayout(m,1).d,18);
+ assert.equal(installationLayout(m,4).w,20);assert.equal(installationLayout(m,4).d,16);
+ for(const site of [1,4]){const [x,z]=m.sites[site],layout=installationLayout(m,site),boxes=campaignObstacles(m);for(let dz=layout.d/2+1;dz>=-2;dz-=.25)assert.equal(blocked(x,z+dz,boxes),false,'front center route reaches equipment');}
 });

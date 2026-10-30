@@ -116,6 +116,14 @@ export function westEntryWalls(x,z,w,d){
 // These layouts define both visible walls and authoritative collision.
 export function installationLayout(m,site=0){
  const [x,z]=m.sites[site],index=MISSIONS.indexOf(m);
+ if(index===0&&(site===1||site===4)){
+  const w=site===1?24:20,d=site===1?18:16,half=w/2,depth=d/2,segment=half-1.5;
+  return {w,d,doorOffset:0,sideEntry:2,windowXs:[-7,-4,4,7],theme:site===1?'freight-warehouse':'dispatch-archive',walls:[
+   ...westEntryWalls(x,z,w,d),[x+half,z,.35,3.5,d],[x,z-depth,w,3.5,.35],
+   [x-(half+1.5)/2,z+depth,segment,3.5,.35],[x+(half+1.5)/2,z+depth,segment,3.5,.35],
+   [x-(half+1.5)/2,z,segment,3.5,.25],[x+(half+1.5)/2,z,segment,3.5,.25]
+  ]};
+ }
  if(index===0&&site!==2)return {w:10,d:8,doorOffset:0,windowXs:[-3,3],theme:'freight',walls:missionWalls([x,z])};
  if(index===0){const w=16,d=12,half=w/2,depth=d/2;return {w,d,doorOffset:0,sideEntry:2,windowXs:[-5,5],theme:'freight-checkpoint',walls:[...westEntryWalls(x,z,w,d),[x+half,z,.35,3.5,d],[x,z-depth,w,3.5,.35],[x-4.5,z+depth,7,3.5,.35],[x+4.5,z+depth,7,3.5,.35],[x-4.5,z,7,3.5,.25],[x+4.5,z,7,3.5,.25]]};}
  if(index===1&&site===3){const w=16,d=12,half=w/2,depth=d/2;return {w,d,doorOffset:0,sideEntry:2,windowXs:[-5,5],theme:'communications',walls:[...westEntryWalls(x,z,w,d),[x+half,z,.35,3.5,d],[x,z-depth,w,3.5,.35],[x-4.5,z+depth,7,3.5,.35],[x+4.5,z+depth,7,3.5,.35],[x-4.5,z,7,3.5,.25],[x+4.5,z,7,3.5,.25]]};}
@@ -161,7 +169,7 @@ export function approachCover(m){
 }
 export function campaignObstacles(m){
  const boxes=m.sites.flatMap((_,i)=>installationLayout(m,i).walls);
- boxes.push(...approachCover(m));
+ boxes.push(...approachCover(m),...freightCargo(m));
  for(const p of m.landmarks)boxes.push([p.x,p.z,p.w,p.h,p.d]);
  for(let n=0;n<6;n++)boxes.push([-5,55-n*22,5,3,12]);
  for(let n=0;n<5;n++)boxes.push([45+n*4,-5,2.8,3.2,2.8]);
@@ -173,4 +181,10 @@ export function sabotageInvestigation(index,step,guard){
  if(index!==0||step!==4)return null;
  const [x,z]=MISSIONS[0].steps[3].position;
  return Math.hypot(guard.x-x,guard.z-z)<85?{x,z}:null;
+}
+
+export function freightCargo(m){
+ if(MISSIONS.indexOf(m)!==0)return [];
+ const [x,z]=m.sites[1];
+ return [-7,7].flatMap(dx=>[-5,5].map(dz=>[x+dx,z+dz,3,2.2,2.4])).concat([[x-8,z+15,4,2.2,2.4],[x+8,z+18,4,2.2,2.4]]);
 }
