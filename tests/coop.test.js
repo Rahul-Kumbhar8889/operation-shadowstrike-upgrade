@@ -73,3 +73,13 @@ test('lethal fuel detonation downs both players and fails the operation',()=>{
 test('all co-op spawns and terminals have valid shared collision; blast hits guards, not teammates',()=>{
  for(let i=0;i<MISSIONS.length;i++){const r=room(i),c=r.coop;for(const p of r.players.values())assert.equal(blocked(p.position.x,p.position.z,c.boxes),false);for(const step of MISSIONS[i].steps)assert.equal(blocked(...step.position,c.boxes),false);c.status='active';const g=c.guards[0];coopBlast(r,{x:g.x,z:g.z},'a',noWall,()=>{});assert.equal(g.hp,0);assert.equal(r.players.get('a').hp,1000);assert.equal(r.players.get('b').hp,1000);}
 });
+
+test('railway sabotage draws nearby surviving patrols toward the fuel site after detonation',()=>{
+ const r=room(0),c=r.coop;c.status='active';c.step=4;c.boxes=[];
+ const [x,z]=MISSIONS[0].steps[3].position;
+ for(const p of r.players.values())p.position={x:-150,z:150};
+ const g={id:0,x:x+30,z,homeX:x+30,homeZ:z,hp:100,rotation:0,lastFire:0,phase:0};c.guards=[g];
+ updateCoop(r,.5,0,noWall,()=>{});assert.ok(g.x<x+30,'patrol investigates blast rather than staying on home patrol');
+ assert.equal(c.step,4,'investigation does not skip the manifest objective');
+ assert.equal(MISSIONS[0].steps[3].kind,'timedcharge');
+});

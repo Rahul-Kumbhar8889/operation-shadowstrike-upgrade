@@ -30,7 +30,7 @@ for(let i=0;i<MISSIONS.length;i++)Object.assign(MISSIONS[i],campaignStory[i]);
 for(const m of MISSIONS){m.steps=m.sites.map(([x,z],i)=>({position:[x,z-2],action:m.actions[i],duration:i%3===1?10:i%3===2?6:3}));m.objective=m.steps[0].position;m.action=m.actions[0];}
 // Objective mechanics are shared by solo and the authoritative co-op server.
 const operationPlans = [
- [['switch','ISOLATE CCTV','Cut the security feed to reduce guard detection range across the compound.'],['recover','SEIZE DISPATCH CODES','Recover the dispatch case from the office.'],['sweep','CLEAR FREIGHT CHECKPOINT','Enter the checkpoint zone and eliminate guards within 14m of its center.'],['plant','RIG FUEL CONTROL','Attach a demolition charge to the fuel controller.'],['recover','RECOVER TRANSPORT MANIFEST','Collect the transport dossier.'],['defend','TRANSMIT FIELD EVIDENCE','Hold the relay area while headquarters receives the evidence.']],
+ [['switch','ISOLATE CCTV','Cut the security feed to reduce guard detection range across the compound.'],['recover','SEIZE DISPATCH CODES','Recover the dispatch case from the office.'],['sweep','CLEAR FREIGHT CHECKPOINT','Enter the checkpoint zone and eliminate guards within 14m of its center.'],['timedcharge','SABOTAGE FREIGHT FUEL','Plant the charge and retreat beyond 12m before the 10-second fuse expires. Nearby patrols will investigate the blast while you recover the manifest.'],['recover','RECOVER TRANSPORT MANIFEST','Collect the transport dossier.'],['defend','TRANSMIT FIELD EVIDENCE','Hold the relay area while headquarters receives the evidence.']],
  [['recover','ACQUIRE SECURITY KEYCARD','Take the access card from the security office.'],['switch','CUT GENERATOR POWER','Isolate the generator breaker.'],['plant','DESTROY UPLINK CONTROL','Rig the uplink; disrupting communications reduces the guard response radius to gunfire.'],['dual','COPY ENCRYPTION NODES','Secure both data racks separately; clear nearby guards and press E at each rack.'],['switch','SHUT DOWN RADAR','Cut the radar tracking circuit.'],['defend','HOLD EMERGENCY RELAY','Protect the relay during the final transmission.']],
  [['recover','RECOVER ACCESS CODES','Collect the command access case.'],['switch','DISABLE BASE ALARM','Disconnect the alarm to reduce the guard response radius to gunfire.'],['rendezvous','SECURE DETENTION YARD','All living squad members must hold the marked yard for 8 seconds after clearing nearby guards.'],['defend','SECURE HANGAR OVERRIDE','Defend the hangar controls until the route opens.'],['plant','DEMOLISH COMMAND ARCHIVE','Place a charge on the archive controller.'],['recover','RECOVER EVACUATION DOSSIER','Take the evacuation dossier before extraction.']],
  [['switch','BREACH PERIMETER CONTROL','Open the airfield security circuit.'],['plant','SABOTAGE AIRFIELD RADAR','Rig the radar to reduce guard detection range across the airfield.'],['switch','CUT RUNWAY POWER','Isolate the runway lighting breaker.'],['recover','RECOVER FLIGHT RECORDS','Take the flight recorder case.'],['timedcharge','SABOTAGE FUEL PUMPS','Plant the charge, then move beyond 12m before the 10-second detonation.'],['download','DOWNLOAD COMMAND INTELLIGENCE','Stay at the server to copy the command archive.'],['defend','HOLD EXTRACTION CORRIDOR','Defend the corridor override until extraction is cleared.']]
@@ -85,7 +85,7 @@ export function recordDualNode(state,node){
 export function guardSightRange(missionIndex,step){return missionIndex===0&&step>0?16:missionIndex===3&&step>=2?19:23;}
 export function guardResponseMultiplier(missionIndex,step){return missionIndex===1&&step>=3?.65:missionIndex===2&&step>=2?.55:1;}
 export function activeOperationEffect(missionIndex,step){
- if(missionIndex===0&&step>0)return 'CCTV OFF • GUARD DETECTION REDUCED';
+ if(missionIndex===0&&step>0)return step===4?'CCTV OFF • PATROLS INVESTIGATING FUEL SABOTAGE':'CCTV OFF • GUARD DETECTION REDUCED';
  if(missionIndex===1&&step>=3)return 'UPLINK DISRUPTED • GUARD RESPONSE RADIUS REDUCED';
  if(missionIndex===2&&step>=2)return 'ALARM OFF • GUARD RESPONSE RADIUS REDUCED';
  if(missionIndex===3&&step>=2)return 'RADAR OFF • GUARD DETECTION REDUCED';
@@ -166,4 +166,11 @@ export function campaignObstacles(m){
  for(let n=0;n<6;n++)boxes.push([-5,55-n*22,5,3,12]);
  for(let n=0;n<5;n++)boxes.push([45+n*4,-5,2.8,3.2,2.8]);
  boxes.push([-45,110,5,6,5]);return boxes;
+}
+
+// Freight sabotage diverts nearby patrols until the transport manifest is secured.
+export function sabotageInvestigation(index,step,guard){
+ if(index!==0||step!==4)return null;
+ const [x,z]=MISSIONS[0].steps[3].position;
+ return Math.hypot(guard.x-x,guard.z-z)<85?{x,z}:null;
 }

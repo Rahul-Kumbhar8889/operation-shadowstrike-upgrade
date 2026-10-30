@@ -13,6 +13,7 @@ import { createSoldier } from "./soldier.js";
 import { createEnvironmentTextures,createTerrainTexture } from "./environmentTextures.js";
 import {
   MISSIONS,
+  sabotageInvestigation,
   objectiveSafe,
   completeSweep,
   advanceRendezvous,
@@ -511,11 +512,12 @@ export function createCampaign({
         visible = distance < guardSightRange(state.index,state.step||0) && lineClear(eye, target);
       const defense=task&&MISSIONS[state.index].steps[state.step||0]?.kind==='defend';
       const rally=defense&&e.model.position.distanceTo(player.position)<60;
+      const sabotage=sabotageInvestigation(state.index,state.step,e.model.position);
       if(visible&&e.hp<=50&&!defense&&time>=(e.nextCoverAttempt||0)){e.coverTarget=findGuardCover(e.model.position,player.position,boxes);e.coverUntil=time+2.5;e.nextCoverAttempt=time+10;}
       const cover=e.coverTarget&&time<e.coverUntil?e.coverTarget:null;
       const dest = cover?new THREE.Vector3(cover.x,0,cover.z):visible
         ? player.position
-        : rally?player.position:e.alertUntil>time ? e.lastKnown : e.home
+        : rally?player.position:e.alertUntil>time ? e.lastKnown : sabotage?new THREE.Vector3(sabotage.x,0,sabotage.z):e.home
             .clone()
             .add(
               new THREE.Vector3(
@@ -528,7 +530,7 @@ export function createCampaign({
       dir.y = 0;
       let moving = dir.length() > (cover ? .3 : visible ? 6 : 0.3);
       if (moving) {
-        const speed = (visible||rally||cover ? 2.2 : 1) * dt;
+        const speed = (visible||rally||sabotage||cover ? 2.2 : 1) * dt;
         const next=guardStep(e.model.position,dest,boxes,speed);
         moving=Math.hypot(next.x-e.model.position.x,next.z-e.model.position.z)>.00001;
         e.model.position.x=next.x;e.model.position.z=next.z;dir.normalize();
