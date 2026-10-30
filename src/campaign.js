@@ -28,6 +28,7 @@ import {
   installationLayout,
   approachCover,
   freightCargo,
+  checkpointGate,
   guardSpawn,
   campaignObstacles,
   interactMission,
@@ -60,7 +61,7 @@ export function createCampaign({
     colliders = [],
     time = 0,
     exit = () => {},
-    beacon, waypoint=null,waypointRing=null,waypointClock=0,flyover=null,flyoverTime=0,surveillanceLamp=null, task=null,revive=null, holdRemaining=null,chargeRemaining=null, dualDone=[], smokeClouds=[],network=false,networkWaiting=false,networkSynced=false,networkAction=()=>{},transitionRemaining=null,objectiveProps=[],completedEffects=new Set();
+    beacon, waypoint=null,waypointRing=null,waypointClock=0,gateCollider=null,flyover=null,flyoverTime=0,surveillanceLamp=null, task=null,revive=null, holdRemaining=null,chargeRemaining=null, dualDone=[], smokeClouds=[],network=false,networkWaiting=false,networkSynced=false,networkAction=()=>{},transitionRemaining=null,objectiveProps=[],completedEffects=new Set();
   const ray = new THREE.Raycaster(),
     panel = document.createElement("section");
   panel.id = "missionPanel";
@@ -116,7 +117,7 @@ export function createCampaign({
     gs.forEach((g) => g.dispose());
     ms.forEach((m) => {if(m.map?.isCanvasTexture && !Object.values(textures).includes(m.map))m.map.dispose();m.dispose();});
     group.clear();
-    flyover=null;flyoverTime=0;
+    gateCollider=null;flyover=null;flyoverTime=0;
     scene.background=baseAtmosphere.background??null;
     if(baseAtmosphere.fog)scene.fog=baseAtmosphere.fog.clone();
     for(const {light,color,intensity} of baseAtmosphere.lights){light.color.copy(color);light.intensity=intensity;}
@@ -283,6 +284,8 @@ export function createCampaign({
       const barrier=prop(x,z,w,h,d,0x777e70);barrier.material.map=textures.concrete;barrier.userData.surface='concrete';
       for(const dx of [-w*.35,w*.35])mesh(new THREE.BoxGeometry(.09,h,.08),0x515b51,x+dx,h/2,z+d/2+.05);
     }
+    const gate=checkpointGate(m,0);
+    if(gate){const [x,z,w,h,d]=gate,gateMesh=prop(x,z,w,h,d,0x4d5956);gateMesh.userData.surface='metal';gateCollider=colliders[colliders.length-1];}
     for(const [x,z,w,h,d] of freightCargo(m)){
       const cargo=prop(x,z,w,h,d,0x58644b);cargo.userData.surface='metal';
       for(const dx of [-w*.35,w*.35])mesh(new THREE.BoxGeometry(.08,h,.035),0x354038,x+dx,h/2,z+d/2+.025);
@@ -374,6 +377,8 @@ export function createCampaign({
     q("h2").textContent = m.name;
     q(".brief").textContent = state.status==='complete'?m.debrief:m.brief;
     const step=state.step||0, current=m.steps[step];
+    if(gateCollider){const closed=step<2;gateCollider.mesh.visible=closed;const i=obstacles.indexOf(gateCollider);if(!closed&&i>=0)obstacles.splice(i,1);}
+
     if(state.status==='active'&&!(network&&networkWaiting))radio.announce(`${state.index}:${step}:${dualDone.join(',')}`,current?`Command. ${current.action}. ${current.hint}`:'Command. Objectives complete. Proceed to extraction and clear nearby guards.');
     if(state.status==='complete')radio.announce(`${state.index}:complete`,m.debrief);
     if(state.status==='failed')radio.announce(`${state.index}:failed`,'Command. Mission failed. Regroup and restart the operation.');

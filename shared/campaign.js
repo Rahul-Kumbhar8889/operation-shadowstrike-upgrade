@@ -30,7 +30,7 @@ for(let i=0;i<MISSIONS.length;i++)Object.assign(MISSIONS[i],campaignStory[i]);
 for(const m of MISSIONS){m.steps=m.sites.map(([x,z],i)=>({position:[x,z-2],action:m.actions[i],duration:i%3===1?10:i%3===2?6:3}));m.objective=m.steps[0].position;m.action=m.actions[0];}
 // Objective mechanics are shared by solo and the authoritative co-op server.
 const operationPlans = [
- [['switch','ISOLATE CCTV','Cut the security feed to reduce guard detection range across the compound.'],['recover','SEIZE DISPATCH CODES','Recover the dispatch case from the office.'],['sweep','CLEAR FREIGHT CHECKPOINT','Enter the checkpoint zone and eliminate guards within 14m of its center.'],['timedcharge','SABOTAGE FREIGHT FUEL','Plant the charge and retreat beyond 12m before the 10-second fuse expires. Nearby patrols will investigate the blast while you recover the manifest.'],['recover','RECOVER TRANSPORT MANIFEST','Collect the transport dossier.'],['defend','TRANSMIT FIELD EVIDENCE','Hold the relay area while headquarters receives the evidence.']],
+ [['switch','ISOLATE CCTV','Cut the security feed to reduce guard detection range across the compound.'],['recover','SEIZE DISPATCH CODES','Recover the dispatch case from the warehouse to unlock the freight checkpoint gate.'],['sweep','CLEAR FREIGHT CHECKPOINT','Enter the checkpoint zone and eliminate guards within 14m of its center.'],['timedcharge','SABOTAGE FREIGHT FUEL','Plant the charge and retreat beyond 12m before the 10-second fuse expires. Nearby patrols will investigate the blast while you recover the manifest.'],['recover','RECOVER TRANSPORT MANIFEST','Collect the transport dossier.'],['defend','TRANSMIT FIELD EVIDENCE','Hold the relay area while headquarters receives the evidence.']],
  [['recover','ACQUIRE SECURITY KEYCARD','Take the access card from the security office.'],['switch','CUT GENERATOR POWER','Isolate the generator breaker.'],['plant','DESTROY UPLINK CONTROL','Rig the uplink; disrupting communications reduces the guard response radius to gunfire.'],['dual','COPY ENCRYPTION NODES','Secure both data racks separately; clear nearby guards and press E at each rack.'],['switch','SHUT DOWN RADAR','Cut the radar tracking circuit.'],['defend','HOLD EMERGENCY RELAY','Protect the relay during the final transmission.']],
  [['recover','RECOVER ACCESS CODES','Collect the command access case.'],['switch','DISABLE BASE ALARM','Disconnect the alarm to reduce the guard response radius to gunfire.'],['rendezvous','SECURE DETENTION YARD','All living squad members must hold the marked yard for 8 seconds after clearing nearby guards.'],['defend','SECURE HANGAR OVERRIDE','Defend the hangar controls until the route opens.'],['plant','DEMOLISH COMMAND ARCHIVE','Place a charge on the archive controller.'],['recover','RECOVER EVACUATION DOSSIER','Take the evacuation dossier before extraction.']],
  [['switch','BREACH PERIMETER CONTROL','Open the airfield security circuit.'],['plant','SABOTAGE AIRFIELD RADAR','Rig the radar to reduce guard detection range across the airfield.'],['switch','CUT RUNWAY POWER','Isolate the runway lighting breaker.'],['recover','RECOVER FLIGHT RECORDS','Take the flight recorder case.'],['timedcharge','SABOTAGE FUEL PUMPS','Plant the charge, then move beyond 12m before the 10-second detonation.'],['download','DOWNLOAD COMMAND INTELLIGENCE','Stay at the server to copy the command archive.'],['defend','HOLD EXTRACTION CORRIDOR','Defend the corridor override until extraction is cleared.']]
@@ -167,9 +167,10 @@ export function approachCover(m){
  // Staggered solid barriers leave the doorway and the western entrance open.
  return [[x-5,front+7,3.6,2.2,1.2],[x+8,front+11,3.6,2.2,1.2]];
 }
-export function campaignObstacles(m){
+export function campaignObstacles(m,step=0){
  const boxes=m.sites.flatMap((_,i)=>installationLayout(m,i).walls);
  boxes.push(...approachCover(m),...freightCargo(m));
+ const gate=checkpointGate(m,step);if(gate)boxes.push(gate);
  for(const p of m.landmarks)boxes.push([p.x,p.z,p.w,p.h,p.d]);
  for(let n=0;n<6;n++)boxes.push([-5,55-n*22,5,3,12]);
  for(let n=0;n<5;n++)boxes.push([45+n*4,-5,2.8,3.2,2.8]);
@@ -187,4 +188,11 @@ export function freightCargo(m){
  if(MISSIONS.indexOf(m)!==0)return [];
  const [x,z]=m.sites[1];
  return [-7,7].flatMap(dx=>[-5,5].map(dz=>[x+dx,z+dz,3,2.2,2.4])).concat([[x-8,z+15,4,2.2,2.4],[x+8,z+18,4,2.2,2.4]]);
+}
+
+// The recovered dispatch codes unlock the freight checkpoint front entrance.
+export function checkpointGate(m,step=0){
+ if(MISSIONS.indexOf(m)!==0||step>=2)return null;
+ const [x,z]=m.sites[2],layout=installationLayout(m,2);
+ return [x,z+layout.d/2,2,3.4,.3];
 }

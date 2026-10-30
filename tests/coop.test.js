@@ -1,6 +1,6 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';
 import {createCoop,coopSnapshot,coopSpawn,interactCoop,interactCoopResult,updateCoop,hurtGuard,coopBlast} from '../server/coop.js';
-import {MISSIONS,blocked,dualNodes} from '../shared/campaign.js';
+import {MISSIONS,blocked,dualNodes,checkpointGate} from '../shared/campaign.js';
 const noWall=()=>Infinity;
 function room(index){const coop=createCoop(index);return {coop,players:new Map([['a',{position:coopSpawn(coop,0),alive:true,hp:1000,kills:0,deaths:0}],['b',{position:coopSpawn(coop,1),alive:true,hp:1000,kills:0,deaths:0}]]),smokes:[]};}
 for(let index=0;index<MISSIONS.length;index++)test(`co-op ${index+1}: ordered shared actions, interruption, extraction, restart snapshot`,()=>{
@@ -82,4 +82,13 @@ test('railway sabotage draws nearby surviving patrols toward the fuel site after
  updateCoop(r,.5,0,noWall,()=>{});assert.ok(g.x<x+30,'patrol investigates blast rather than staying on home patrol');
  assert.equal(c.step,4,'investigation does not skip the manifest objective');
  assert.equal(MISSIONS[0].steps[3].kind,'timedcharge');
+});
+
+test('dispatch recovery opens the shared physical gate and restart closes it again',()=>{
+ const r=room(0),c=r.coop,m=MISSIONS[0],gate=checkpointGate(m);c.status='active';c.step=1;c.guards=[];
+ assert.ok(blocked(gate[0],gate[1],c.boxes));
+ const [x,z]=m.steps[1].position;r.players.get('a').position={x,z};assert.ok(interactCoop(r,'a'));
+ updateCoop(r,2,0,noWall,()=>{});assert.equal(c.step,2);assert.equal(c.gateClosed,false);
+ assert.equal(blocked(gate[0],gate[1],c.boxes),false);assert.equal(coopSnapshot(r).step,2);
+ assert.ok(blocked(gate[0],gate[1],createCoop(0).boxes));
 });
