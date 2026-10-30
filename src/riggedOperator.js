@@ -15,7 +15,7 @@ export async function attachRiggedOperator(root,fabric){
  for(const child of hidden)child.visible=false;
  for(const child of root.userData.aimRig.children)if(child!==root.userData.rifle)child.visible=false;
  visual.traverse(o=>{if(!o.isMesh)return;o.castShadow=o.receiveShadow=true;o.frustumCulled=false;
-  const prepare=source=>{const material=source.clone();material.side=THREE.FrontSide;if(/Clothes/.test(material.name)){material.map=fabric;material.color.setHex(0xaab49a);material.roughness=.92;}if(/Iron|Metal/.test(material.name)){material.metalness=.2;material.roughness=.65;}if(/Glass/.test(material.name)){material.metalness=.1;material.roughness=.4;}return material;};
+  const prepare=source=>{const material=source.clone();material.side=THREE.FrontSide;if(/Clothes/.test(material.name)){material.map=fabric;material.bumpMap=fabric;material.bumpScale=.006;material.color.setHex(0xaab49a);material.roughness=.92;}if(/Iron|Metal/.test(material.name)){material.metalness=.2;material.roughness=.65;}if(/Glass/.test(material.name)){material.metalness=.1;material.roughness=.25;}if(/Armor/.test(material.name)){material.roughness=.82;material.metalness=.03;}if(/Boots|Shoes/.test(material.name)){material.roughness=.94;material.metalness=0;}return material;};
   o.material=Array.isArray(o.material)?o.material.map(prepare):prepare(o.material);
  });
  const rifle=root.userData.rifle;
